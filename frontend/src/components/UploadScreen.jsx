@@ -1,4 +1,22 @@
 import { useState, useRef, useCallback } from 'react';
+import Cropper from 'react-easy-crop';
+import 'react-easy-crop/react-easy-crop.css';
+
+/** Render the crop to a canvas and return a JPEG Blob */
+async function getCroppedImg(imageSrc, pixelCrop) {
+  const img = new Image();
+  img.src = imageSrc;
+  await new Promise((resolve) => { img.onload = resolve; });
+  const canvas = document.createElement('canvas');
+  canvas.width = pixelCrop.width;
+  canvas.height = pixelCrop.height;
+  canvas.getContext('2d').drawImage(
+    img,
+    pixelCrop.x, pixelCrop.y, pixelCrop.width, pixelCrop.height,
+    0, 0, pixelCrop.width, pixelCrop.height,
+  );
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+}
 
 const KEY_OPTIONS = [
   'None', 'C', 'Cm', 'C#', 'C#m', 'D', 'Dm', 'D#', 'D#m',
@@ -24,6 +42,12 @@ export default function UploadScreen({ onBack }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  // Crop modal state
+  const [cropSrc, setCropSrc] = useState(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const croppedAreaPixelsRef = useRef(null);
+
   const audioInputRef = useRef(null);
   const artworkInputRef = useRef(null);
 
@@ -37,10 +61,29 @@ export default function UploadScreen({ onBack }) {
   const handleArtworkChange = useCallback((e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setArtwork(file);
     const reader = new FileReader();
-    reader.onload = (ev) => setArtworkPreview(ev.target.result);
+    reader.onload = (ev) => {
+      setCropSrc(ev.target.result);
+      setCrop({ x: 0, y: 0 });
+      setZoom(1);
+    };
     reader.readAsDataURL(file);
+  }, []);
+
+  const onCropComplete = useCallback((_, pixels) => {
+    croppedAreaPixelsRef.current = pixels;
+  }, []);
+
+  const handleCropConfirm = useCallback(async () => {
+    const blob = await getCroppedImg(cropSrc, croppedAreaPixelsRef.current);
+    setArtwork(new File([blob], 'artwork.jpg', { type: 'image/jpeg' }));
+    setArtworkPreview(URL.createObjectURL(blob));
+    setCropSrc(null);
+  }, [cropSrc]);
+
+  const handleCropCancel = useCallback(() => {
+    setCropSrc(null);
+    if (artworkInputRef.current) artworkInputRef.current.value = '';
   }, []);
 
   const handleTagKeyDown = useCallback((e) => {
@@ -139,6 +182,94 @@ export default function UploadScreen({ onBack }) {
       background: '#000',
       overflowY: 'auto',
     }}>
+
+      {/* ── Artwork crop modal ── */}
+      {cropSrc && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 200,
+          background: '#000',
+          display: 'flex',
+          flexDirection: 'column',
+        }}>
+          {/* Modal header */}
+          <div style={{
+            height: '56px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            borderBottom: '1px solid #1a1a1a',
+            position: 'relative',
+          }}>
+            <span style={{ color: '#fff', fontSize: '17px', fontWeight: 700 }}>
+              Crop Artwork
+            </span>
+          </div>
+
+          {/* Cropper area */}
+          <div style={{ position: 'relative', flex: 1 }}>
+            <Cropper
+              image={cropSrc}
+              crop={crop}
+              zoom={zoom}
+              aspect={9 / 16}
+              onCropChange={setCrop}
+              onZoomChange={setZoom}
+              onCropComplete={onCropComplete}
+            />
+          </div>
+
+          {/* Modal footer */}
+          <div style={{
+            height: '88px',
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '16px',
+            borderTop: '1px solid #1a1a1a',
+            padding: '0 24px',
+          }}>
+            <button
+              onClick={handleCropCancel}
+              style={{
+                flex: 1,
+                height: '48px',
+                borderRadius: '14px',
+                background: '#1c1c1e',
+                border: '1px solid #2a2a2e',
+                color: '#fff',
+                fontSize: '15px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleCropConfirm}
+              style={{
+                flex: 1,
+                height: '48px',
+                borderRadius: '14px',
+                background: '#7C3AED',
+                border: 'none',
+                color: '#fff',
+                fontSize: '15px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: '0 0 16px rgba(124,58,237,0.4)',
+                fontFamily: 'inherit',
+              }}
+            >
+              Apply
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Header ── */}
       <div style={{

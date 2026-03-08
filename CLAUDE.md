@@ -80,6 +80,14 @@ Flask is a pure REST API. React handles all UI. They communicate
 via HTTP — React fetches from Flask endpoints, Flask returns JSON.
 There is no Jinja templating, no server-rendered HTML.
 
+### Swipe animation flow
+1. User presses Skip or Like → `exitDir` set to `'left'`/`'right'`
+2. `SwipeCard` runs CSS exit animation, fires `onExited` when done
+3. `pendingActionRef.current()` calls `skipTrack`/`likeTrack` from `useTrackQueue`
+4. `exitDir` resets to null; hook fetches next track; `key={track.id}` re-mounts card
+
+`useTrackQueue` maintains a `seenIds` array passed as `?seen=` to prevent repeat tracks. Both skip and like currently advance the queue identically (like persistence is a future feature).
+
 ## Known Issues / Tech Debt
 - `GET /` and `POST /upload` in `app.py` still use `render_template`,
   `flash`, and `redirect` — legacy Jinja behavior that must be
@@ -89,28 +97,25 @@ There is no Jinja templating, no server-rendered HTML.
 
 ## Flask API Endpoints
 - `GET /` — legacy Jinja route, to be deprecated
-- `POST /api/upload` — accepts audio file + metadata, returns JSON
+- `POST /upload` — legacy Jinja form-upload route, to be deprecated
+- `POST /api/upload` — accepts audio file + metadata, returns `{"success": true, "id": <int>}`
 - `GET /api/random-track?seen=1,2,3` — returns a random track as
   JSON excluding the given IDs; returns `{"exhausted": true}` when
   none remain
 
-### Track JSON shape
+### `/api/upload` form fields
+`audio` (file, required), `artwork` (file, optional — jpg/jpeg/png/webp),
+`title`, `bpm`, `key`, `genre`, `tags` (comma-separated, max 3).
+
+### `/api/random-track` response
 ```json
 {
-  "id": 1,
-  "filename": "uuid_originalname.wav",
-  "original_name": "originalname.wav",
-  "title": "My Loop",
-  "bpm": 95,
-  "key": "E minor",
-  "genre": "Hip Hop",
-  "tags": "dark,groovy,drake type",
-  "artwork": "uuid_artwork.jpg",
-  "uploaded_at": "2024-01-01 00:00:00"
+  "id": 1, "filename": "uuid_name.wav", "original_name": "name.wav",
+  "title": "My Loop", "bpm": 95, "key": "E minor", "genre": "Hip Hop",
+  "tags": "dark,groovy", "artwork": "uuid_art.jpg", "uploaded_at": "..."
 }
 ```
-Audio is served at `http://localhost:5000/static/uploads/<filename>`.
-Artwork is served at `http://localhost:5000/static/artwork/<filename>`.
+Audio served at `/static/uploads/<filename>`, artwork at `/static/artwork/<filename>`.
 
 ## Database Schema
 Single table in `rast.db`:
@@ -129,6 +134,7 @@ CREATE TABLE uploads (
 )
 ```
 All DB access goes through `database.py`. Never write SQL in `app.py`.
+`database.py` uses a `_migrate()` helper for idempotent `ALTER TABLE` migrations — add new columns there, never recreate the table.
 
 ### Tags
 - Stored as a comma-separated string (e.g. `"dark,groovy,drake type"`)

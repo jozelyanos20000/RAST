@@ -33,12 +33,13 @@ def init_db():
 def _migrate(conn):
     existing = {row[1] for row in conn.execute("PRAGMA table_info(uploads)").fetchall()}
     pending = [
-        ("title",   "TEXT"),
-        ("bpm",     "INTEGER"),
-        ("key",     "TEXT"),
-        ("genre",   "TEXT"),
-        ("tags",    "TEXT"),
-        ("artwork", "TEXT"),
+        ("title",       "TEXT"),
+        ("bpm",         "INTEGER"),
+        ("key",         "TEXT"),
+        ("genre",       "TEXT"),
+        ("tags",        "TEXT"),
+        ("artwork",     "TEXT"),
+        ("description", "TEXT"),
     ]
     for col, col_type in pending:
         if col not in existing:
@@ -46,15 +47,15 @@ def _migrate(conn):
 
 
 def add_upload(filename, original_name, title=None, bpm=None, key=None,
-               genre=None, tags=None, artwork=None):
+               genre=None, tags=None, artwork=None, description=None):
     with get_connection() as conn:
         conn.execute(
             """
             INSERT INTO uploads
-                (filename, original_name, title, bpm, key, genre, tags, artwork)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (filename, original_name, title, bpm, key, genre, tags, artwork, description)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (filename, original_name, title, bpm, key, genre, tags, artwork),
+            (filename, original_name, title, bpm, key, genre, tags, artwork, description),
         )
         conn.commit()
         return conn.execute("SELECT last_insert_rowid()").fetchone()[0]

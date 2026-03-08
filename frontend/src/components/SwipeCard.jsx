@@ -27,11 +27,14 @@ function parseTags(tagsStr) {
  * audio playback, progress bar, and bottom track info.
  *
  * Props:
- *   track    {object}   — { id, filename, original_name }
+ *   track    {object}   — { id, filename, original_name, title, tags, artwork, ... }
  *   exitDir  {string}   — 'left' | 'right' | null  (triggers exit animation)
  *   onExited {function} — called when exit animation completes
+ *   onSkip   {function} — called when X button pressed
+ *   onLike   {function} — called when heart button pressed
+ *   disabled {boolean}  — disables action buttons during loading/transition
  */
-export default function SwipeCard({ track, exitDir = null, onExited }) {
+export default function SwipeCard({ track, exitDir = null, onExited, onSkip, onLike, disabled = false }) {
   const audioRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0); // 0-1
@@ -178,7 +181,7 @@ export default function SwipeCard({ track, exitDir = null, onExited }) {
         zIndex: 5,
       }} />
 
-      {/* ── Bottom content: name row + tags ── */}
+      {/* ── Bottom content: name row + tags + action buttons ── */}
       <div style={{
         position: 'absolute',
         bottom: 0, left: 0, right: 0,
@@ -234,8 +237,24 @@ export default function SwipeCard({ track, exitDir = null, onExited }) {
           </button>
         </div>
 
+        {/* Description */}
+        {track.description && (
+          <div style={{
+            fontSize: '12px',
+            color: 'rgba(255,255,255,0.55)',
+            lineHeight: 1.45,
+            marginBottom: '8px',
+            overflow: 'hidden',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+          }}>
+            {track.description}
+          </div>
+        )}
+
         {/* Vibe tags */}
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '20px' }}>
           {tags.map((tag) => (
             <span
               key={tag}
@@ -245,9 +264,9 @@ export default function SwipeCard({ track, exitDir = null, onExited }) {
                 WebkitBackdropFilter: 'blur(8px)',
                 border: '1px solid rgba(255,255,255,0.18)',
                 color: '#fff',
-                fontSize: '13px',
+                fontSize: '9px',
                 fontWeight: 500,
-                padding: '5px 14px',
+                padding: '3.5px 10px',
                 borderRadius: '9999px',
                 whiteSpace: 'nowrap',
               }}
@@ -255,6 +274,76 @@ export default function SwipeCard({ track, exitDir = null, onExited }) {
               {tag}
             </span>
           ))}
+        </div>
+
+        {/* Action buttons */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '26px',
+        }}>
+          {/* Skip (X) button */}
+          <button
+            onClick={onSkip}
+            disabled={disabled}
+            aria-label="Skip track"
+            style={{
+              width: '30px',
+              height: '30px',
+              borderRadius: '50%',
+              background: '#1c1c1e',
+              border: '1.5px solid #2a2a2e',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              opacity: disabled ? 0.4 : 1,
+              transition: 'transform 0.1s ease, opacity 0.2s ease',
+              padding: 0,
+            }}
+            onMouseDown={(e) => !disabled && (e.currentTarget.style.transform = 'scale(0.93)')}
+            onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+            onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                 stroke="#E11D48" strokeWidth="2.5" strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+
+          {/* Like (Heart) button */}
+          <button
+            onClick={onLike}
+            disabled={disabled}
+            aria-label="Like track"
+            style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: '50%',
+              background: '#ffffff',
+              border: 'none',
+              boxShadow: '0 0 24px rgba(225,29,72,0.4), 0 6px 18px rgba(0,0,0,0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              opacity: disabled ? 0.4 : 1,
+              transition: 'transform 0.1s ease, opacity 0.2s ease',
+              padding: 0,
+            }}
+            onMouseDown={(e) => !disabled && (e.currentTarget.style.transform = 'scale(0.93)')}
+            onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+            onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24"
+                 fill="#E11D48" stroke="#E11D48" strokeWidth="1.5"
+                 strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+            </svg>
+          </button>
         </div>
       </div>
     </div>

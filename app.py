@@ -86,6 +86,7 @@ def api_upload():
         artwork_filename = art_stored
 
     title = request.form.get("title", "").strip() or None
+    description = request.form.get("description", "").strip() or None
     bpm_raw = request.form.get("bpm", "").strip()
     bpm = int(bpm_raw) if bpm_raw.isdigit() else None
     key = request.form.get("key", "").strip() or None
@@ -98,6 +99,7 @@ def api_upload():
         filename=stored_filename,
         original_name=original_name,
         title=title,
+        description=description,
         bpm=bpm,
         key=key,
         genre=genre,
@@ -118,6 +120,13 @@ def random_track():
         "id": track["id"],
         "filename": track["filename"],
         "original_name": track["original_name"],
+        "title": track["title"],
+        "description": track["description"],
+        "bpm": track["bpm"],
+        "key": track["key"],
+        "genre": track["genre"],
+        "tags": track["tags"],
+        "artwork": track["artwork"],
         "uploaded_at": track["uploaded_at"],
     })
 

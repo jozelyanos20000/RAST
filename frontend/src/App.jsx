@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
 import SwipeCard from './components/SwipeCard.jsx';
-import ActionBar from './components/ActionBar.jsx';
 import NavBar from './components/NavBar.jsx';
 import UploadScreen from './components/UploadScreen.jsx';
 import { useTrackQueue } from './hooks/useTrackQueue.js';
@@ -167,7 +166,7 @@ export default function App() {
       {/* Card container */}
       <div style={{
         flex: 1,
-        padding: '12px 12px 8px',
+        padding: '12px 12px 12px',
         display: 'flex',
         flexDirection: 'column',
         minHeight: 0,
@@ -182,17 +181,14 @@ export default function App() {
             track={currentTrack}
             exitDir={exitDir}
             onExited={handleExited}
+            onSkip={handleSkip}
+            onLike={handleLike}
+            disabled={isActionDisabled}
           />
         ) : (
           <SkeletonCard />
         )}
       </div>
-
-      <ActionBar
-        onSkip={handleSkip}
-        onLike={handleLike}
-        disabled={isActionDisabled}
-      />
 
       <NavBar activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
