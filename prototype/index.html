@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RAST</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: #000;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    * { box-sizing: border-box; }
+
+    .progress-fill {
+      background: linear-gradient(90deg, #7C3AED, #a855f7);
+      box-shadow: 0 0 8px rgba(124, 58, 237, 0.9);
+    }
+
+    .glass-btn {
+      background: rgba(255,255,255,0.18);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.25);
+    }
+
+    .skip-btn {
+      background: #1c1c1e;
+      border: 1.5px solid #2a2a2e;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+      transition: transform 0.1s ease;
+    }
+    .skip-btn:active { transform: scale(0.94); }
+
+    .heart-btn {
+      background: #ffffff;
+      box-shadow: 0 0 24px rgba(225,29,72,0.4), 0 6px 18px rgba(0,0,0,0.5);
+      transition: transform 0.1s ease;
+    }
+    .heart-btn:active { transform: scale(0.94); }
+
+    .tag-pill {
+      background: rgba(255,255,255,0.13);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.18);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 5px 14px;
+      border-radius: 9999px;
+      white-space: nowrap;
+    }
+
+    .nav-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: none;
+      border: none;
+      cursor: pointer;
+      gap: 3px;
+      padding: 0;
+    }
+
+    .nav-active-dot {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: #7C3AED;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Root: full screen, max 430px centered, black bg, flex column -->
+  <div style="
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    max-width: 430px;
+    margin: 0 auto;
+    background: #000;
+    position: relative;
+    overflow: hidden;
+  ">
+
+    <!-- ── CARD AREA (flex-1, padding 12px sides/top, 8px bottom) ── -->
+    <div style="
+      flex: 1;
+      padding: 12px 12px 8px;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    ">
+
+      <!-- THE CARD -->
+      <div style="
+        flex: 1;
+        border-radius: 20px;
+        overflow: hidden;
+        position: relative;
+        background: #000;
+        min-height: 0;
+        /* Subtle border so card edges are visible against black bg */
+        box-shadow: 0 0 0 1px #1e1e1e, 0 0 40px rgba(124,58,237,0.15);
+      ">
+
+        <!-- ── WAVEFORM BACKGROUND (centered, shifted up slightly to account for bottom text) ── -->
+        <div style="
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #000;
+          padding-bottom: 80px;
+        ">
+          <!-- EKG-style waveform: flat baseline left/right, central spike cluster, play circle center -->
+          <svg viewBox="0 0 320 140" xmlns="http://www.w3.org/2000/svg"
+               style="width: 90%; max-width: 340px;">
+
+            <!-- ── Flat left baseline ── -->
+            <line x1="0" y1="70" x2="72" y2="70" stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round"/>
+
+            <!-- ── Rising left bumps ── -->
+            <line x1="79"  y1="56" x2="79"  y2="84" stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round"/>
+            <line x1="87"  y1="50" x2="87"  y2="90" stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round"/>
+            <line x1="95"  y1="32" x2="95"  y2="108" stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round"/>
+            <line x1="103" y1="14" x2="103" y2="126" stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round"/>
+            <line x1="111" y1="26" x2="111" y2="114" stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round"/>
+            <line x1="119" y1="42" x2="119" y2="98"  stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round"/>
+
+            <!-- ── Play circle (center x=160, y=70, r=28) — gap left=132 right=188 ── -->
+            <circle cx="160" cy="70" r="28" stroke="#7C3AED" stroke-width="2.5" fill="rgba(124,58,237,0.08)"/>
+            <!-- Play triangle -->
+            <polygon points="153,58 153,82 176,70" fill="#7C3AED"/>
+
+            <!-- ── Rising right bumps (mirror) ── -->
+            <line x1="201" y1="42" x2="201" y2="98"  stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round"/>
+            <line x1="209" y1="26" x2="209" y2="114" stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round"/>
+            <line x1="217" y1="14" x2="217" y2="126" stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round"/>
+            <line x1="225" y1="32" x2="225" y2="108" stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round"/>
+            <line x1="233" y1="50" x2="233" y2="90"  stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round"/>
+            <line x1="241" y1="56" x2="241" y2="84"  stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round"/>
+
+            <!-- ── Flat right baseline ── -->
+            <line x1="248" y1="70" x2="320" y2="70" stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round"/>
+
+          </svg>
+        </div>
+
+        <!-- ── PROGRESS BAR (top of card, 16px from edges) ── -->
+        <div style="position: absolute; top: 16px; left: 16px; right: 16px; z-index: 20;">
+          <div style="height: 4px; background: rgba(255,255,255,0.15); border-radius: 9999px; overflow: hidden;">
+            <div class="progress-fill" style="height: 100%; width: 40%; border-radius: 9999px;"></div>
+          </div>
+        </div>
+
+        <!-- ── GRADIENT OVERLAY (bottom 60%, transparent → black) ── -->
+        <div style="
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(
+            to top,
+            rgba(0,0,0,0.95) 0%,
+            rgba(0,0,0,0.75) 28%,
+            rgba(0,0,0,0.3) 48%,
+            transparent 62%
+          );
+          pointer-events: none;
+          z-index: 5;
+        "></div>
+
+        <!-- ── BOTTOM CONTENT ── -->
+        <div style="
+          position: absolute;
+          bottom: 0; left: 0; right: 0;
+          padding: 0 20px 24px;
+          z-index: 10;
+        ">
+
+          <!-- Name row -->
+          <div style="display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 10px;">
+
+            <!-- Track name -->
+            <div style="
+              font-size: 38px;
+              font-weight: 900;
+              color: #fff;
+              line-height: 1.05;
+              letter-spacing: -0.5px;
+              flex: 1;
+              padding-right: 12px;
+              text-shadow: 0 2px 16px rgba(0,0,0,0.8);
+            ">Dark Loop 001</div>
+
+            <!-- Upward arrow (stems placeholder button) -->
+            <button class="glass-btn" style="
+              width: 44px; height: 44px;
+              border-radius: 50%;
+              display: flex; align-items: center; justify-content: center;
+              flex-shrink: 0;
+              cursor: pointer;
+              margin-bottom: 2px;
+            ">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                   stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="19" x2="12" y2="5"/>
+                <polyline points="5,12 12,5 19,12"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Vibe tags -->
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <span class="tag-pill">Drake type beat</span>
+            <span class="tag-pill">Groovy</span>
+            <span class="tag-pill">Trap</span>
+          </div>
+        </div>
+
+      </div><!-- /card -->
+    </div><!-- /card area -->
+
+    <!-- ── ACTION BAR ── -->
+    <div style="
+      height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 52px;
+      background: #000;
+      flex-shrink: 0;
+    ">
+      <!-- Skip (X) -->
+      <button class="skip-btn" style="
+        width: 60px; height: 60px;
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer;
+      ">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
+             stroke="#E11D48" stroke-width="2.5" stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+
+      <!-- Like (Heart) — larger, white bg -->
+      <button class="heart-btn" style="
+        width: 72px; height: 72px;
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer;
+      ">
+        <svg width="32" height="32" viewBox="0 0 24 24"
+             fill="#E11D48" stroke="#E11D48" stroke-width="1.5"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- ── BOTTOM TAB NAV ── -->
+    <div style="
+      height: 60px;
+      display: flex;
+      align-items: stretch;
+      background: #000;
+      border-top: 1px solid #161616;
+      flex-shrink: 0;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    ">
+
+      <!-- Discover (active) -->
+      <button class="nav-btn">
+        <!-- Compass icon with filled center diamond -->
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
+             stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <polygon points="16.24,7.76 14.12,14.12 7.76,16.24 9.88,9.88" fill="#fff" stroke="none"/>
+        </svg>
+        <div class="nav-active-dot"></div>
+      </button>
+
+      <!-- Upload -->
+      <button class="nav-btn">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
+             stroke="#6B7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="16" x2="12" y2="8"/>
+          <polyline points="8,12 12,8 16,12"/>
+        </svg>
+      </button>
+
+      <!-- Library -->
+      <button class="nav-btn">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
+             stroke="#6B7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="4" rx="1"/>
+          <rect x="3" y="10" width="18" height="4" rx="1"/>
+          <rect x="3" y="16" width="18" height="4" rx="1"/>
+        </svg>
+      </button>
+
+      <!-- Chat -->
+      <button class="nav-btn">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
+             stroke="#6B7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+      </button>
+
+      <!-- Profile -->
+      <button class="nav-btn">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
+             stroke="#6B7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+          <circle cx="12" cy="7" r="4"/>
+        </svg>
+      </button>
+
+    </div>
+  </div><!-- /root -->
+
+</body>
+</html>

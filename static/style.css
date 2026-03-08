@@ -1,0 +1,388 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: #f0f2f5;
+  color: #1a1a2e;
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+/* Header */
+header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+header h1 {
+  font-size: 2.5rem;
+  color: #6c3fc5;
+  letter-spacing: -0.5px;
+}
+
+.tagline {
+  color: #666;
+  margin-top: 0.4rem;
+  font-size: 1rem;
+}
+
+/* Flash messages */
+.flash-messages {
+  list-style: none;
+  margin-bottom: 1.5rem;
+}
+
+.flash-messages li {
+  background: #e8f5e9;
+  border-left: 4px solid #4caf50;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+  color: #2e7d32;
+}
+
+.flash-messages li.error {
+  background: #fdecea;
+  border-left-color: #f44336;
+  color: #c62828;
+}
+
+/* Upload section */
+.upload-section {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1.75rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+}
+
+.upload-section h2 {
+  font-size: 1.2rem;
+  margin-bottom: 1.25rem;
+  color: #333;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.file-input-wrapper {
+  position: relative;
+}
+
+.file-input-wrapper input[type="file"] {
+  width: 100%;
+  padding: 0.6rem;
+  border: 2px dashed #c4adf0;
+  border-radius: 8px;
+  background: #faf8ff;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.file-input-wrapper input[type="file"]:focus {
+  outline: none;
+  border-color: #6c3fc5;
+}
+
+button[type="submit"] {
+  padding: 0.75rem 1.5rem;
+  background: #6c3fc5;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+button[type="submit"]:hover {
+  background: #5530a8;
+}
+
+.hint {
+  font-size: 0.82rem;
+  color: #999;
+  margin-top: 0.5rem;
+}
+
+/* Feed section */
+.feed-section h2 {
+  font-size: 1.2rem;
+  margin-bottom: 1.25rem;
+  color: #333;
+}
+
+.audio-feed {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.audio-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.track-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.track-name {
+  font-weight: 600;
+  font-size: 1rem;
+  color: #1a1a2e;
+  word-break: break-all;
+}
+
+.track-date {
+  font-size: 0.78rem;
+  color: #aaa;
+  white-space: nowrap;
+}
+
+audio {
+  width: 100%;
+  border-radius: 6px;
+}
+
+.empty-state {
+  text-align: center;
+  color: #aaa;
+  font-size: 1rem;
+  padding: 2rem 0;
+}
+
+/* ─── Swipe Deck ─────────────────────────────────────── */
+
+body {
+  overflow-x: hidden;
+}
+
+.deck-section {
+  margin-bottom: 2.5rem;
+}
+
+.deck-section h2 {
+  font-size: 1.2rem;
+  margin-bottom: 1.25rem;
+  color: #333;
+}
+
+.deck-state {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: #888;
+  font-size: 1rem;
+}
+
+.deck-state-spinner {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 1rem;
+  border: 4px solid #e0d7f7;
+  border-top-color: #6c3fc5;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.deck-wrapper {
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem 1rem 1rem;
+}
+
+.deck-card {
+  width: 300px;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  will-change: transform, opacity;
+  background: #fff;
+  user-select: none;
+}
+
+.deck-art {
+  height: 210px;
+  background: linear-gradient(135deg, #6c3fc5, #e91e8c);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  gap: 0.75rem;
+}
+
+.deck-music-note {
+  font-size: 4rem;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1;
+}
+
+.deck-card.playing .deck-music-note {
+  animation: notePulse 1.2s ease-in-out infinite;
+}
+
+@keyframes notePulse {
+  0%, 100% { transform: scale(1);   opacity: 0.75; }
+  50%       { transform: scale(1.12); opacity: 1; }
+}
+
+/* Waveform bars */
+.waveform {
+  display: none;
+  align-items: flex-end;
+  gap: 4px;
+  height: 32px;
+}
+
+.deck-card.playing .waveform {
+  display: flex;
+}
+
+.waveform span {
+  display: block;
+  width: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.9);
+  animation: bar 0.7s ease-in-out infinite alternate;
+}
+
+.waveform span:nth-child(1) { height: 10px; animation-delay: 0s;    }
+.waveform span:nth-child(2) { height: 22px; animation-delay: 0.1s;  }
+.waveform span:nth-child(3) { height: 16px; animation-delay: 0.2s;  }
+.waveform span:nth-child(4) { height: 28px; animation-delay: 0.05s; }
+.waveform span:nth-child(5) { height: 14px; animation-delay: 0.15s; }
+
+@keyframes bar {
+  from { transform: scaleY(0.4); }
+  to   { transform: scaleY(1); }
+}
+
+.play-indicator {
+  position: absolute;
+  bottom: 10px;
+  right: 12px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  font-size: 0.85rem;
+  padding: 4px 8px;
+  border-radius: 20px;
+  pointer-events: none;
+  letter-spacing: 1px;
+}
+
+.deck-info {
+  padding: 0.9rem 1rem 1rem;
+  text-align: center;
+}
+
+.deck-track-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #1a1a2e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.deck-track-date {
+  font-size: 0.78rem;
+  color: #aaa;
+  margin-top: 0.25rem;
+}
+
+.deck-actions {
+  display: flex;
+  justify-content: center;
+  gap: 3.5rem;
+  margin-top: 1.25rem;
+}
+
+.action-btn {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  background: #fff;
+  font-size: 1.4rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s, box-shadow 0.15s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.action-btn:hover:not(:disabled) {
+  transform: scale(1.12);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+}
+
+.action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.action-skip {
+  color: #f44336;
+}
+
+.action-like {
+  color: #4caf50;
+}
+
+/* Swipe animations */
+@keyframes swipeLeft {
+  to { transform: translateX(-200%) rotate(-18deg); opacity: 0; }
+}
+
+@keyframes swipeRight {
+  to { transform: translateX(200%) rotate(18deg); opacity: 0; }
+}
+
+@keyframes cardIn {
+  from { transform: translateY(-10px) scale(0.96); opacity: 0; }
+  to   { transform: translateY(0)     scale(1);    opacity: 1; }
+}
+
+.anim-swipe-left {
+  animation: swipeLeft 0.38s ease-in forwards;
+}
+
+.anim-swipe-right {
+  animation: swipeRight 0.38s ease-in forwards;
+}
+
+.anim-in {
+  animation: cardIn 0.32s ease-out forwards;
+}

@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=390, initial-scale=1.0" />
+  <title>RAST — Upload Track</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 390px;
+      background: #000;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+      color: #fff;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      min-height: 100vh;
+      overflow-y: auto;
+    }
+
+    /* ── Header ── */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      background: #000;
+      border-bottom: 1px solid #1a1a1a;
+      gap: 12px;
+    }
+
+    .header__back {
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: none;
+      border: none;
+      cursor: pointer;
+      margin-left: -8px;
+      flex-shrink: 0;
+      color: #fff;
+    }
+
+    .header__title {
+      flex: 1;
+      font-size: 17px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    /* ── Scrollable body ── */
+    .scroll-body {
+      padding: 16px 16px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      /* stretch cards to full column width */
+      align-items: stretch;
+    }
+
+    /* ── Card sections ── */
+    .card {
+      background: #0d0d0f;
+      border-radius: 20px;
+      padding: 20px;
+      /* no bottom margin — gap handled by flex parent */
+    }
+
+    .card__header {
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 16px;
+    }
+
+    /* ── Audio upload zone ── */
+    .audio-zone {
+      border: 2px dashed rgba(255,255,255,0.15);
+      border-radius: 14px;
+      height: 88px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .audio-zone:hover {
+      border-color: rgba(124,58,237,0.5);
+    }
+
+    .audio-zone.has-file {
+      border-color: #0D9488;
+      background: rgba(13,148,136,0.06);
+    }
+
+    .audio-zone__icon {
+      line-height: 0;
+    }
+
+    .audio-zone__main-text {
+      font-size: 14px;
+      color: #fff;
+    }
+
+    .audio-zone__main-text span.purple {
+      color: #7C3AED;
+    }
+
+    .audio-zone__sub-text {
+      font-size: 12px;
+      color: #6b7280;
+    }
+
+    .audio-zone__filename {
+      font-size: 13px;
+      font-weight: 500;
+      color: #fff;
+      max-width: 280px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .audio-zone__change-hint {
+      font-size: 11px;
+      color: #6b7280;
+    }
+
+    /* ── Labels ── */
+    .field-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #9ca3af;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+
+    .field-label__count {
+      color: #6b7280;
+      font-size: 12px;
+    }
+
+    /* ── Inputs ── */
+    .input, .select, .textarea {
+      width: 100%;
+      background: #1a1a1c;
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 10px;
+      color: #fff;
+      font-size: 14px;
+      font-family: inherit;
+      padding: 11px 14px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .input:focus, .select:focus, .textarea:focus {
+      border-color: #7C3AED;
+    }
+
+    .input::placeholder, .textarea::placeholder {
+      color: #4b5563;
+    }
+
+    .input[type="number"]::-webkit-inner-spin-button,
+    .input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+    }
+
+    .input-height-44 {
+      height: 44px;
+      padding-top: 0;
+      padding-bottom: 0;
+    }
+
+    /* ── Select ── */
+    .select {
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      background-color: #1a1a1c;
+      padding-right: 36px;
+      cursor: pointer;
+      height: 44px;
+    }
+
+    .select option {
+      background: #1a1a1c;
+      color: #fff;
+    }
+
+    /* ── Textarea ── */
+    .textarea {
+      resize: none;
+      line-height: 1.5;
+    }
+
+    /* ── Artwork + Title row ── */
+    .artwork-title-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .artwork-box {
+      width: 88px;
+      height: 88px;
+      flex-shrink: 0;
+      border-radius: 10px;
+      background: #1a1a1c;
+      border: 1px solid rgba(255,255,255,0.10);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .artwork-box:hover::after {
+      content: 'Edit';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 600;
+      text-align: center;
+      padding: 5px 0;
+    }
+
+    .artwork-box img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .title-field {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Key + BPM row ── */
+    .key-bpm-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .key-col { flex: 3; }
+    .bpm-col { flex: 2; }
+
+    /* ── Genre ── */
+    .genre-field {
+      margin-bottom: 16px;
+    }
+
+    /* ── Tags ── */
+    .tags-container {
+      background: #1a1a1c;
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 10px;
+      min-height: 44px;
+      padding: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      cursor: text;
+      transition: border-color 0.15s;
+    }
+
+    .tags-container:focus-within {
+      border-color: #7C3AED;
+    }
+
+    .tag-pill {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: #2a2a2e;
+      color: #fff;
+      font-size: 13px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-family: inherit;
+    }
+
+    .tag-pill__remove {
+      background: none;
+      border: none;
+      color: #9ca3af;
+      cursor: pointer;
+      padding: 0 0 0 2px;
+      font-size: 15px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      transition: color 0.15s;
+    }
+
+    .tag-pill__remove:hover {
+      color: #f87171;
+    }
+
+    .tag-input {
+      flex: 1;
+      min-width: 120px;
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      padding: 4px 6px;
+    }
+
+    .tag-input::placeholder {
+      color: #4b5563;
+    }
+
+    /* ── Submit button ── */
+    .submit-btn {
+      width: 100%;
+      height: 54px;
+      border-radius: 20px;
+      background: #7C3AED;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 0 20px rgba(124,58,237,0.4);
+      transition: background 0.2s, transform 0.1s;
+      font-family: inherit;
+    }
+
+    .submit-btn:hover {
+      background: #6d28d9;
+    }
+
+    .submit-btn:active {
+      transform: scale(0.98);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <button class="header__back" aria-label="Go back" onclick="history.back()">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+           stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="19" y1="12" x2="5" y2="12"/>
+        <polyline points="12,5 5,12 12,19"/>
+      </svg>
+    </button>
+    <div class="header__title">Upload Track</div>
+  </header>
+
+  <!-- Scrollable body -->
+  <div class="scroll-body">
+
+    <!-- ── Audio Upload Zone ── -->
+    <div class="card" style="padding-bottom: 20px;">
+      <div class="card__header" style="margin-bottom: 14px;">Audio File</div>
+      <div class="audio-zone" id="audioZone" onclick="document.getElementById('audioInput').click()">
+        <!-- Default state -->
+        <div id="audioDefault" style="display:flex; flex-direction:column; align-items:center; gap:5px;">
+          <div class="audio-zone__icon" style="line-height:0;">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none"
+                 stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 18V5l12-2v13"/>
+              <circle cx="6" cy="18" r="3"/>
+              <circle cx="18" cy="16" r="3"/>
+            </svg>
+          </div>
+          <div class="audio-zone__main-text" style="text-align:center;">
+            Drop your audio file here or <span class="purple">browse</span>
+          </div>
+          <div class="audio-zone__sub-text" style="text-align:center;">
+            MP3 · WAV · Max 64 MB
+          </div>
+        </div>
+        <!-- File chosen state (hidden by default, toggled to flex by JS) -->
+        <div id="audioChosen" style="display:none; flex-direction:column; align-items:center; gap:5px;">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
+               stroke="#0D9488" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          <div class="audio-zone__filename" id="audioFilename"></div>
+          <div class="audio-zone__change-hint">Tap to change</div>
+        </div>
+      </div>
+      <input id="audioInput" type="file" accept=".mp3,.wav,audio/mpeg,audio/wav" style="display:none"
+             onchange="handleAudioChange(this)" />
+    </div>
+
+    <!-- ── Basic Info ── -->
+    <div class="card">
+      <div class="card__header">Basic Info</div>
+
+      <!-- Artwork + Title -->
+      <div class="artwork-title-row">
+        <!-- Artwork -->
+        <div class="artwork-box" id="artworkBox" onclick="document.getElementById('artworkInput').click()" title="Upload artwork">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
+               stroke="#6b7280" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+        </div>
+        <input id="artworkInput" type="file" accept="image/jpeg,image/png,image/webp" style="display:none"
+               onchange="handleArtworkChange(this)" />
+
+        <!-- Title field -->
+        <div class="title-field">
+          <div class="field-label">
+            <span>Title</span>
+            <span class="field-label__count" id="titleCount">0/60</span>
+          </div>
+          <input
+            type="text"
+            class="input input-height-44"
+            id="titleInput"
+            maxlength="60"
+            placeholder="Track name"
+            oninput="document.getElementById('titleCount').textContent = this.value.length + '/60'"
+          />
+        </div>
+      </div>
+
+      <!-- Description -->
+      <div>
+        <div class="field-label">
+          <span>Description</span>
+          <span class="field-label__count" id="descCount">0/500</span>
+        </div>
+        <textarea
+          class="textarea"
+          id="descInput"
+          maxlength="500"
+          rows="3"
+          placeholder="What's the vibe? Share the inspiration behind this loop."
+          oninput="document.getElementById('descCount').textContent = this.value.length + '/500'"
+        ></textarea>
+      </div>
+    </div>
+
+    <!-- ── Metadata ── -->
+    <div class="card">
+      <div class="card__header">Metadata</div>
+
+      <!-- Key + BPM -->
+      <div class="key-bpm-row">
+        <div class="key-col">
+          <div class="field-label"><span>Key</span></div>
+          <select class="select" id="keySelect">
+            <option>None</option>
+            <option>C</option><option>Cm</option>
+            <option>C#</option><option>C#m</option>
+            <option>D</option><option>Dm</option>
+            <option>D#</option><option>D#m</option>
+            <option>E</option><option>Em</option>
+            <option>F</option><option>Fm</option>
+            <option>F#</option><option>F#m</option>
+            <option>G</option><option>Gm</option>
+            <option>G#</option><option>G#m</option>
+            <option>A</option><option>Am</option>
+            <option>A#</option><option>A#m</option>
+            <option>B</option><option>Bm</option>
+          </select>
+        </div>
+        <div class="bpm-col">
+          <div class="field-label"><span>BPM</span></div>
+          <input type="number" class="input input-height-44" id="bpmInput"
+                 min="1" max="999" placeholder="120" />
+        </div>
+      </div>
+
+      <!-- Genre -->
+      <div class="genre-field">
+        <div class="field-label"><span>Genre</span></div>
+        <select class="select" id="genreSelect">
+          <option>None</option>
+          <option>Hip Hop</option>
+          <option>Trap</option>
+          <option>R&amp;B</option>
+          <option>Pop</option>
+          <option>Electronic</option>
+          <option>Drill</option>
+          <option>Afrobeats</option>
+          <option>Lo-fi</option>
+          <option>Jazz</option>
+          <option>Soul</option>
+          <option>Other</option>
+        </select>
+      </div>
+
+      <!-- Tags -->
+      <div>
+        <div class="field-label">
+          <span>Tags</span>
+          <span class="field-label__count" id="tagsCount">0/3</span>
+        </div>
+        <div class="tags-container" id="tagsContainer" onclick="document.getElementById('tagInput').focus()">
+          <!-- Example pills for prototype -->
+          <span class="tag-pill">
+            Dark vibes
+            <button class="tag-pill__remove" onclick="removeTag(this, event)" aria-label="Remove tag">×</button>
+          </span>
+          <span class="tag-pill">
+            Groovy
+            <button class="tag-pill__remove" onclick="removeTag(this, event)" aria-label="Remove tag">×</button>
+          </span>
+          <input
+            id="tagInput"
+            type="text"
+            class="tag-input"
+            placeholder="Add another…"
+            onkeydown="handleTagKeyDown(event)"
+          />
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Submit ── -->
+    <button class="submit-btn" onclick="handleSubmit()">
+      Upload Track
+    </button>
+
+  </div><!-- /.scroll-body -->
+
+  <script>
+    // ── Tag count initial state (2 pills already shown in prototype) ──
+    let tagCount = 2;
+    document.getElementById('tagsCount').textContent = tagCount + '/3';
+
+    function updateTagCount() {
+      const pills = document.querySelectorAll('#tagsContainer .tag-pill');
+      tagCount = pills.length;
+      document.getElementById('tagsCount').textContent = tagCount + '/3';
+      const input = document.getElementById('tagInput');
+      if (tagCount >= 3) {
+        input.style.display = 'none';
+      } else {
+        input.style.display = '';
+        input.placeholder = tagCount === 0 ? 'Type a vibe tag and press Enter' : 'Add another…';
+      }
+    }
+
+    function removeTag(btn, event) {
+      event.stopPropagation();
+      btn.closest('.tag-pill').remove();
+      updateTagCount();
+    }
+
+    function handleTagKeyDown(event) {
+      const input = event.target;
+      if ((event.key === 'Enter' || event.key === ',') && input.value.trim()) {
+        event.preventDefault();
+        const val = input.value.trim().replace(/,/g, '');
+        if (val && tagCount < 3) {
+          const pill = document.createElement('span');
+          pill.className = 'tag-pill';
+          pill.innerHTML = `${val}<button class="tag-pill__remove" onclick="removeTag(this, event)" aria-label="Remove tag">×</button>`;
+          document.getElementById('tagsContainer').insertBefore(pill, input);
+          input.value = '';
+          updateTagCount();
+        }
+      } else if (event.key === 'Backspace' && !input.value) {
+        const pills = document.querySelectorAll('#tagsContainer .tag-pill');
+        if (pills.length > 0) {
+          pills[pills.length - 1].remove();
+          updateTagCount();
+        }
+      }
+    }
+
+    // ── Audio file selection ──
+    function handleAudioChange(input) {
+      if (!input.files || !input.files[0]) return;
+      const file = input.files[0];
+      const zone = document.getElementById('audioZone');
+      zone.classList.add('has-file');
+      document.getElementById('audioDefault').style.display = 'none';
+      const chosen = document.getElementById('audioChosen');
+      chosen.style.cssText = 'display:flex; flex-direction:column; align-items:center; gap:5px;';
+      document.getElementById('audioFilename').textContent = file.name;
+    }
+
+    // ── Artwork selection ──
+    function handleArtworkChange(input) {
+      if (!input.files || !input.files[0]) return;
+      const file = input.files[0];
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const box = document.getElementById('artworkBox');
+        box.innerHTML = `<img src="${e.target.result}" alt="Artwork" style="width:100%;height:100%;object-fit:cover;" />`;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // ── Submit ──
+    function handleSubmit() {
+      const btn = document.querySelector('.submit-btn');
+      btn.textContent = 'Uploading…';
+      btn.style.background = '#4c1d95';
+      btn.style.cursor = 'not-allowed';
+      setTimeout(() => {
+        btn.textContent = 'Upload Track';
+        btn.style.background = '#7C3AED';
+        btn.style.cursor = 'pointer';
+      }, 2000);
+    }
+  </script>
+</body>
+</html>
