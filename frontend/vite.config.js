@@ -6,7 +6,13 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
-      '/api': 'http://localhost:5000',
+      '/api': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+        // Rewrite Set-Cookie domain so the browser accepts cookies
+        // served via the dev proxy on localhost:5173
+        cookieDomainRewrite: { 'localhost:5000': 'localhost' },
+      },
       '/static': 'http://localhost:5000',
     }
   }

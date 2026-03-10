@@ -2,7 +2,44 @@ import { useState, useCallback, useRef } from 'react';
 import SwipeCard from './components/SwipeCard.jsx';
 import NavBar from './components/NavBar.jsx';
 import UploadScreen from './components/UploadScreen.jsx';
+import LoginScreen from './components/LoginScreen.jsx';
+import RegisterScreen from './components/RegisterScreen.jsx';
+import ProfileScreen from './components/ProfileScreen.jsx';
+import LibraryScreen from './components/LibraryScreen.jsx';
 import { useTrackQueue } from './hooks/useTrackQueue.js';
+import { useAuth } from './hooks/useAuth.js';
+
+/**
+ * SplashScreen — shown while the auth session check is in-flight.
+ */
+function SplashScreen() {
+  return (
+    <div style={{
+      height: '100%',
+      background: '#000',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+    }}>
+      <style>{`
+        @keyframes rast-pulse {
+          0%, 100% { opacity: 1; }
+          50%       { opacity: 0.35; }
+        }
+      `}</style>
+      <div style={{
+        fontSize: '52px',
+        fontWeight: 900,
+        color: '#fff',
+        letterSpacing: '-3px',
+        animation: 'rast-pulse 1.8s ease-in-out infinite',
+        textShadow: '0 0 40px rgba(124,58,237,0.5)',
+      }}>
+        RAST
+      </div>
+    </div>
+  );
+}
 
 /**
  * SkeletonCard — placeholder shown while the first track loads.
@@ -86,16 +123,12 @@ function ExhaustedCard() {
 /**
  * App — Root component.
  *
- * Layout (mobile-first, max-w 430px centered):
- *   ┌─────────────────┐
- *   │  card area      │  flex-1
- *   ├─────────────────┤
- *   │  action bar     │  100px
- *   ├─────────────────┤
- *   │  nav bar        │  60px
- *   └─────────────────┘
+ * Auth flow:
+ *   isLoading=true  → SplashScreen (session check in-flight)
+ *   !accessToken    → LoginScreen / RegisterScreen
+ *   accessToken     → full app (Discover / Upload)
  *
- * Swipe flow:
+ * Swipe flow (Discover):
  *   1. User presses Skip or Like
  *   2. exitDir is set → triggers SwipeCard CSS exit animation
  *   3. SwipeCard fires onExited when transition ends
@@ -103,8 +136,12 @@ function ExhaustedCard() {
  *   5. exitDir resets to null; hook fetches next track; key change re-mounts card
  */
 export default function App() {
+  const { accessToken, isLoading: authLoading, login, register, logout } = useAuth();
+  const [authView, setAuthView] = useState('login'); // 'login' | 'register'
   const [activeTab, setActiveTab] = useState('discover');
-  const { currentTrack, isLoading, isExhausted, skipTrack, likeTrack } = useTrackQueue();
+
+  const { currentTrack, isLoading, isExhausted, skipTrack, likeTrack } =
+    useTrackQueue(accessToken);
 
   // 'left' | 'right' | null — drives the card exit animation
   const [exitDir, setExitDir] = useState(null);
@@ -125,7 +162,6 @@ export default function App() {
   }, [currentTrack, exitDir, likeTrack]);
 
   const handleExited = useCallback(() => {
-    // Fire the queued action, then clear animation state
     if (pendingActionRef.current) {
       pendingActionRef.current();
       pendingActionRef.current = null;
@@ -134,6 +170,66 @@ export default function App() {
   }, []);
 
   const isActionDisabled = isLoading || isExhausted || !currentTrack || !!exitDir;
+
+  // ── Auth loading ──
+  if (authLoading) {
+    return <SplashScreen />;
+  }
+
+  // ── Unauthenticated ──
+  if (!accessToken) {
+    return (
+      <div style={{ height: '100%', background: '#000' }}>
+        {authView === 'register' ? (
+          <RegisterScreen
+            onRegister={register}
+            onGoToLogin={() => setAuthView('login')}
+          />
+        ) : (
+          <LoginScreen
+            onLogin={login}
+            onGoToRegister={() => setAuthView('register')}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // ── Library screen ──
+  if (activeTab === 'library') {
+    return (
+      <div style={{
+        height: '100%',
+        maxWidth: '430px',
+        margin: '0 auto',
+        background: '#000',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}>
+        <LibraryScreen accessToken={accessToken} />
+        <NavBar activeTab={activeTab} onTabChange={setActiveTab} />
+      </div>
+    );
+  }
+
+  // ── Profile screen ──
+  if (activeTab === 'profile') {
+    return (
+      <div style={{
+        height: '100%',
+        maxWidth: '430px',
+        margin: '0 auto',
+        background: '#000',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}>
+        <ProfileScreen accessToken={accessToken} onLogout={logout} />
+        <NavBar activeTab={activeTab} onTabChange={setActiveTab} />
+      </div>
+    );
+  }
 
   // ── Upload screen ──
   if (activeTab === 'upload') {
@@ -145,7 +241,10 @@ export default function App() {
         background: '#000',
         overflow: 'hidden',
       }}>
-        <UploadScreen onBack={() => setActiveTab('discover')} />
+        <UploadScreen
+          onBack={() => setActiveTab('discover')}
+          accessToken={accessToken}
+        />
       </div>
     );
   }

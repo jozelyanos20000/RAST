@@ -1,7 +1,3 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 # RAST — Project Brief for Claude
 
 ## What This Is
@@ -46,6 +42,7 @@ Vite proxy is configured in `frontend/vite.config.js` pointing
 - Frontend: React + Vite (port 5173)
 - Styling: Tailwind CSS v4 (installed via @tailwindcss/vite)
 - Audio: HTML5 Audio API
+- Auth: JWT via flask-jwt-extended (access + refresh tokens)
 - Accepted audio formats: MP3, WAV only
 
 ## Project Structure
@@ -70,9 +67,14 @@ RAST/
         │   ├── WaveformSvg.jsx
         │   ├── ActionBar.jsx
         │   ├── NavBar.jsx
-        │   └── UploadScreen.jsx
+        │   ├── UploadScreen.jsx
+        │   ├── LoginScreen.jsx
+        │   ├── RegisterScreen.jsx
+        │   ├── LibraryScreen.jsx
+        │   └── ProfileScreen.jsx
         └── hooks/
-            └── useTrackQueue.js
+            ├── useTrackQueue.js
+            └── useAuth.js
 ```
 
 ## Architecture
@@ -80,28 +82,41 @@ Flask is a pure REST API. React handles all UI. They communicate
 via HTTP — React fetches from Flask endpoints, Flask returns JSON.
 There is no Jinja templating, no server-rendered HTML.
 
+JWT access tokens are stored in memory (React state), refresh tokens
+in httpOnly cookies. All protected routes require a valid Bearer token.
+
 ### Swipe animation flow
 1. User presses Skip or Like → `exitDir` set to `'left'`/`'right'`
 2. `SwipeCard` runs CSS exit animation, fires `onExited` when done
 3. `pendingActionRef.current()` calls `skipTrack`/`likeTrack` from `useTrackQueue`
 4. `exitDir` resets to null; hook fetches next track; `key={track.id}` re-mounts card
 
-`useTrackQueue` maintains a `seenIds` array passed as `?seen=` to prevent repeat tracks. Both skip and like currently advance the queue identically (like persistence is a future feature).
+`useTrackQueue` maintains a `seenIds` array passed as `?seen=` to prevent
+repeat tracks. Swipe right calls `POST /api/likes` to persist the like.
 
 ## Known Issues / Tech Debt
 - `GET /` and `POST /upload` in `app.py` still use `render_template`,
   `flash`, and `redirect` — legacy Jinja behavior that must be
   refactored to return JSON responses.
-- `requirements.txt` only lists `flask`. `werkzeug` is used directly
-  — add it explicitly if needed.
 
 ## Flask API Endpoints
-- `GET /` — legacy Jinja route, to be deprecated
-- `POST /upload` — legacy Jinja form-upload route, to be deprecated
+
+### Auth (public)
+- `POST /api/auth/register` — `{username, email, password}` → `{access_token}`
+- `POST /api/auth/login` — `{email or username, password}` → `{access_token}`
+- `POST /api/auth/refresh` — uses httpOnly refresh token cookie → `{access_token}`
+- `POST /api/auth/logout` — clears refresh token cookie
+
+### Protected (require Bearer token)
 - `POST /api/upload` — accepts audio file + metadata, returns `{"success": true, "id": <int>}`
-- `GET /api/random-track?seen=1,2,3` — returns a random track as
-  JSON excluding the given IDs; returns `{"exhausted": true}` when
-  none remain
+- `GET /api/random-track?seen=1,2,3` — returns random track JSON excluding current user's uploads
+- `GET /api/likes` — returns all tracks liked by the current user with full metadata
+- `POST /api/likes` — `{track_id}` → `{"success": true}` — records a like
+- `DELETE /api/likes/<track_id>` — removes a like (future use)
+
+### Legacy (to be deprecated)
+- `GET /` — legacy Jinja route
+- `POST /upload` — legacy Jinja form-upload route
 
 ### `/api/upload` form fields
 `audio` (file, required), `artwork` (file, optional — jpg/jpeg/png/webp),
@@ -111,20 +126,47 @@ There is no Jinja templating, no server-rendered HTML.
 ```json
 {
   "id": 1, "filename": "uuid_name.wav", "original_name": "name.wav",
-  "title": "My Loop", "bpm": 95, "key": "E minor", "genre": "Hip Hop",
-  "tags": "dark,groovy", "artwork": "uuid_art.jpg", "uploaded_at": "..."
+  "title": "My Loop", "description": "...", "bpm": 95, "key": "E minor",
+  "genre": "Hip Hop", "tags": "dark,groovy", "artwork": "uuid_art.jpg",
+  "uploaded_at": "...", "uploaded_by": "username"
 }
 ```
 Audio served at `/static/uploads/<filename>`, artwork at `/static/artwork/<filename>`.
 
+### `/api/likes` response
+```json
+[
+  {
+    "id": 1, "filename": "uuid_name.wav", "title": "My Loop",
+    "description": "...", "bpm": 95, "key": "E minor", "genre": "Hip Hop",
+    "tags": "dark,groovy", "artwork": "uuid_art.jpg",
+    "uploaded_by": "username", "liked_at": "..."
+  }
+]
+```
+
 ## Database Schema
-Single table in `rast.db`:
+
+### users
+```sql
+CREATE TABLE users (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    username      TEXT NOT NULL UNIQUE,
+    email         TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+```
+
+### uploads
 ```sql
 CREATE TABLE uploads (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id       INTEGER REFERENCES users(id),
     filename      TEXT NOT NULL,
     original_name TEXT NOT NULL,
     title         TEXT,
+    description   TEXT,
     bpm           INTEGER,
     key           TEXT,
     genre         TEXT,
@@ -133,13 +175,39 @@ CREATE TABLE uploads (
     uploaded_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )
 ```
+
+### likes
+```sql
+CREATE TABLE likes (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER REFERENCES users(id),
+    track_id   INTEGER REFERENCES uploads(id),
+    liked_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, track_id)
+)
+```
+`UNIQUE(user_id, track_id)` prevents a user from liking the same track twice.
+Add via `_migrate()` in `database.py` — never recreate existing tables.
 All DB access goes through `database.py`. Never write SQL in `app.py`.
-`database.py` uses a `_migrate()` helper for idempotent `ALTER TABLE` migrations — add new columns there, never recreate the table.
+
+### Seed Account
+Existing tracks (uploaded before auth) are assigned to a seed account:
+- Username: `rast_seed`
+- Email: `seed@rast.app`
+- Password: env var `RAST_SEED_PASSWORD` (default: `RastSeed#2024!` — change in production)
 
 ### Tags
-- Stored as a comma-separated string (e.g. `"dark,groovy,drake type"`)
+- Stored as comma-separated string (e.g. `"dark,groovy,drake type"`)
 - Maximum 3 tags per track
 - Enforced at application level, not database level
+
+## Auth Rules
+- JWT access tokens stored in React memory only (never localStorage)
+- Refresh tokens stored in httpOnly cookies (XSS safe)
+- All routes except `/api/auth/*` require valid Bearer token
+- Unauthenticated users see only Login/Register screens
+- No social login — email and password only
+- Login accepts either email or username
 
 ## Design System
 - Mobile-first, responsive for desktop
@@ -184,6 +252,41 @@ All DB access goes through `database.py`. Never write SQL in `app.py`.
 - On error: display inline error message, do not navigate away
 - Connected to `POST /api/upload` endpoint
 
+## Auth Screen Spec
+- Login and Register screens replace the app entirely when logged out
+- Mobile-first, full screen, dark aesthetic matching design system
+- Login: email or username + password fields, submit button, link to Register
+- Register: username + email + password fields, submit button, link to Login
+- On successful login/register: land on Discover screen
+- On error: inline error message below the relevant field
+- No social login buttons
+
+## Library Screen Spec
+- Two tabs at top center: 'Liked' and 'Uploaded'
+- Active tab: white text with white underline indicator
+- Inactive tab: muted gray text
+- Search icon top right — tapping opens inline text input, filters by title client-side
+- Default active tab: Liked
+
+### Liked Tab
+- Fetches from `GET /api/likes`
+- Each row contains:
+  - Small square artwork thumbnail (fallback: accent color square)
+  - Track title in white, tags below in muted small text
+  - Audio progress bar in center, clickable to play/pause
+  - Key and BPM columns on the right in muted text
+  - Download button (arrow-down icon) far right — triggers direct download of audio file
+- Ordered by `liked_at` descending
+
+### Uploaded Tab
+- Placeholder only for now — renders empty state, not functional yet
+
+## Profile Screen Spec
+- Circle avatar placeholder showing user's first initial
+- Username (display only)
+- Email (display only)
+- Sign Out button — calls `POST /api/auth/logout`, clears auth state, redirects to Login
+
 ## Bottom Nav Icons (left to right)
 1. Discover (current view)
 2. Upload
@@ -192,13 +295,11 @@ All DB access goes through `database.py`. Never write SQL in `app.py`.
 5. Profile
 
 ## Out of Scope (do not build yet)
-- User authentication
 - Credit system
 - Drag gesture swiping
 - Stem purchasing
 - Chat functionality
-- Library functionality
-- Profile functionality
+- Uploaded tab in Library (placeholder only)
 - Filters
 
 ## Rules
@@ -211,3 +312,6 @@ All DB access goes through `database.py`. Never write SQL in `app.py`.
 - Tags field stores max 3 comma-separated vibe tags
 - All DB access goes through database.py, never raw SQL in app.py
 - Artwork files saved to static/artwork/, audio files to static/uploads/
+- JWT access tokens in React memory only, never localStorage
+- Refresh tokens in httpOnly cookies only
+- likes table has UNIQUE(user_id, track_id) — never duplicate likes

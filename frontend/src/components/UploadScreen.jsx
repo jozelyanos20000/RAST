@@ -28,7 +28,7 @@ const GENRE_OPTIONS = [
   'Drill', 'Afrobeats', 'Lo-fi', 'Jazz', 'Soul', 'Other',
 ];
 
-export default function UploadScreen({ onBack }) {
+export default function UploadScreen({ onBack, accessToken }) {
   const [audioFile, setAudioFile] = useState(null);
   const [artwork, setArtwork] = useState(null);
   const [artworkPreview, setArtworkPreview] = useState(null);
@@ -119,7 +119,11 @@ export default function UploadScreen({ onBack }) {
       fd.append('genre', genre === 'None' ? '' : genre);
       fd.append('tags', tags.join(','));
 
-      const res = await fetch('/api/upload', { method: 'POST', body: fd });
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: fd,
+      });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Upload failed.');
       onBack();
