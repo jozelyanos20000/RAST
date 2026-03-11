@@ -1,3 +1,7 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # RAST — Project Brief for Claude
 
 ## What This Is
@@ -84,6 +88,13 @@ There is no Jinja templating, no server-rendered HTML.
 
 JWT access tokens are stored in memory (React state), refresh tokens
 in httpOnly cookies. All protected routes require a valid Bearer token.
+Access tokens expire in 15 min; `useAuth` proactively refreshes every 14 min
+via `POST /api/auth/refresh` using the httpOnly cookie.
+
+### Navigation
+There is no React Router. Screen routing is done with `activeTab` state in
+`App.jsx` — values: `'discover'`, `'upload'`, `'library'`, `'profile'`. The
+nav bar calls `setActiveTab`; each screen renders conditionally.
 
 ### Swipe animation flow
 1. User presses Skip or Like → `exitDir` set to `'left'`/`'right'`
@@ -108,11 +119,13 @@ repeat tracks. Swipe right calls `POST /api/likes` to persist the like.
 - `POST /api/auth/logout` — clears refresh token cookie
 
 ### Protected (require Bearer token)
+- `GET /api/me` — returns `{username, email}` for the authenticated user
 - `POST /api/upload` — accepts audio file + metadata, returns `{"success": true, "id": <int>}`
 - `GET /api/random-track?seen=1,2,3` — returns random track JSON excluding current user's uploads
 - `GET /api/likes` — returns all tracks liked by the current user with full metadata
 - `POST /api/likes` — `{track_id}` → `{"success": true}` — records a like
 - `DELETE /api/likes/<track_id>` — removes a like (future use)
+- `GET /api/my-uploads` — returns all tracks uploaded by the current user, each with a `like_count` field
 
 ### Legacy (to be deprecated)
 - `GET /` — legacy Jinja route
@@ -137,9 +150,9 @@ Audio served at `/static/uploads/<filename>`, artwork at `/static/artwork/<filen
 ```json
 [
   {
-    "id": 1, "filename": "uuid_name.wav", "title": "My Loop",
-    "description": "...", "bpm": 95, "key": "E minor", "genre": "Hip Hop",
-    "tags": "dark,groovy", "artwork": "uuid_art.jpg",
+    "id": 1, "filename": "uuid_name.wav", "original_name": "name.wav",
+    "title": "My Loop", "description": "...", "bpm": 95, "key": "E minor",
+    "genre": "Hip Hop", "tags": "dark,groovy", "artwork": "uuid_art.jpg",
     "uploaded_by": "username", "liked_at": "..."
   }
 ]
@@ -187,7 +200,9 @@ CREATE TABLE likes (
 )
 ```
 `UNIQUE(user_id, track_id)` prevents a user from liking the same track twice.
-Add via `_migrate()` in `database.py` — never recreate existing tables.
+Add new columns/tables via `_migrate()` in `database.py` — never drop or
+recreate existing tables. The `uploads` table's `description` and `user_id`
+columns were added this way and are absent from the original `CREATE TABLE`.
 All DB access goes through `database.py`. Never write SQL in `app.py`.
 
 ### Seed Account
@@ -279,8 +294,12 @@ Existing tracks (uploaded before auth) are assigned to a seed account:
 - Ordered by `liked_at` descending
 
 ### Uploaded Tab
-- Placeholder only for now — renders empty state, not functional yet
-
+- Fetches from `GET /api/my-uploads`
+- Each row identical to Liked tab except:
+  - Heart icon + like count replaces the download button
+  - Shows `0` if no likes yet
+- Ordered by `uploaded_at` descending
+```
 ## Profile Screen Spec
 - Circle avatar placeholder showing user's first initial
 - Username (display only)
@@ -299,7 +318,6 @@ Existing tracks (uploaded before auth) are assigned to a seed account:
 - Drag gesture swiping
 - Stem purchasing
 - Chat functionality
-- Uploaded tab in Library (placeholder only)
 - Filters
 
 ## Rules

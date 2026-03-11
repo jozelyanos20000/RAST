@@ -191,6 +191,21 @@ def get_likes_by_user(user_id):
         ).fetchall()
 
 
+def get_user_uploads_with_likes(user_id):
+    with get_connection() as conn:
+        return conn.execute(
+            """
+            SELECT u.*, COUNT(l.id) AS like_count
+            FROM uploads u
+            LEFT JOIN likes l ON l.track_id = u.id
+            WHERE u.user_id = ?
+            GROUP BY u.id
+            ORDER BY u.uploaded_at DESC
+            """,
+            (user_id,),
+        ).fetchall()
+
+
 def get_random_track(exclude_ids=None, exclude_user_id=None):
     base = """
         SELECT u.*, us.username AS uploaded_by

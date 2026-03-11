@@ -18,7 +18,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from database import (
     init_db, add_upload, get_all_uploads, get_random_track,
     create_user, get_user_by_email, get_user_by_email_or_username, get_user_by_id,
-    add_like, remove_like, get_likes_by_user,
+    add_like, remove_like, get_likes_by_user, get_user_uploads_with_likes,
 )
 
 UPLOAD_FOLDER = os.path.join("static", "uploads")
@@ -277,6 +277,27 @@ def delete_like(track_id):
     user_id = int(get_jwt_identity())
     remove_like(user_id, track_id)
     return jsonify(success=True)
+
+
+@app.route("/api/my-uploads")
+@jwt_required(locations=["headers"])
+def my_uploads():
+    user_id = int(get_jwt_identity())
+    rows = get_user_uploads_with_likes(user_id)
+    return jsonify([{
+        "id":            r["id"],
+        "filename":      r["filename"],
+        "original_name": r["original_name"],
+        "title":         r["title"],
+        "description":   r["description"],
+        "bpm":           r["bpm"],
+        "key":           r["key"],
+        "genre":         r["genre"],
+        "tags":          r["tags"],
+        "artwork":       r["artwork"],
+        "uploaded_at":   r["uploaded_at"],
+        "like_count":    r["like_count"],
+    } for r in rows])
 
 
 @app.route("/api/random-track")

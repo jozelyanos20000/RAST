@@ -83,14 +83,9 @@ function MiniWaveform({ track, progress, isActive, isPlaying, onToggle }) {
   );
 }
 
-function TrackRow({ track, isActive, isPlaying, progress, onToggle, onDownload }) {
+function TrackRow({ track, isActive, isPlaying, progress, onToggle, actionSlot }) {
   const color = accent(track.id);
   const tags = track.tags ? track.tags.split(',').filter(Boolean) : [];
-
-  const handleDownload = useCallback((e) => {
-    e.stopPropagation();
-    onDownload(track);
-  }, [track, onDownload]);
 
   return (
     <div style={{
@@ -174,31 +169,8 @@ function TrackRow({ track, isActive, isPlaying, progress, onToggle, onDownload }
         </div>
       </div>
 
-      {/* Download */}
-      <button
-        onClick={handleDownload}
-        aria-label="Download"
-        style={{
-          width: '30px',
-          height: '30px',
-          flexShrink: 0,
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: '#6B7280',
-          padding: 0,
-          borderRadius: '50%',
-        }}
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-          <polyline points="7,10 12,15 17,10" />
-          <line x1="12" y1="15" x2="12" y2="3" />
-        </svg>
-      </button>
+      {/* Action slot — download button (Liked) or like count (Uploaded) */}
+      {actionSlot}
     </div>
   );
 }
@@ -213,9 +185,14 @@ export default function LibraryScreen({ accessToken }) {
   const [activeTab, setActiveTab] = useState('liked');
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
   const [likes, setLikes] = useState([]);
-  const [isLoading, setIsLoading] = useState(true); // true until first fetch resolves
-  const [error, setError] = useState(null);
+  const [likesLoading, setLikesLoading] = useState(true);
+  const [likesError, setLikesError] = useState(null);
+
+  const [uploads, setUploads] = useState([]);
+  const [uploadsLoading, setUploadsLoading] = useState(true);
+  const [uploadsError, setUploadsError] = useState(null);
 
   // Audio state
   const audioRef = useRef(null);
@@ -237,16 +214,43 @@ export default function LibraryScreen({ accessToken }) {
         if (cancelled) return;
         if (Array.isArray(data)) {
           setLikes(data);
-          setError(null);
+          setLikesError(null);
         } else {
-          setError(data.error || 'Failed to load liked tracks');
+          setLikesError(data.error || 'Failed to load liked tracks');
         }
-        setIsLoading(false);
+        setLikesLoading(false);
       })
       .catch((err) => {
         if (!cancelled) {
-          setError(err.message);
-          setIsLoading(false);
+          setLikesError(err.message);
+          setLikesLoading(false);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [activeTab, accessToken]);
+
+  // ── Fetch uploaded tracks ───────────────────────────────────────────────
+  useEffect(() => {
+    if (activeTab !== 'uploaded') return;
+    let cancelled = false;
+    fetch('/api/my-uploads', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (Array.isArray(data)) {
+          setUploads(data);
+          setUploadsError(null);
+        } else {
+          setUploadsError(data.error || 'Failed to load uploaded tracks');
+        }
+        setUploadsLoading(false);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setUploadsError(err.message);
+          setUploadsLoading(false);
         }
       });
     return () => { cancelled = true; };
@@ -317,9 +321,12 @@ export default function LibraryScreen({ accessToken }) {
     setSearchQuery('');
   }, []);
 
-  const filteredLikes = likes.filter((t) =>
-    !searchQuery || (t.title || t.original_name || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const matchesSearch = useCallback((t) =>
+    !searchQuery || (t.title || t.original_name || '').toLowerCase().includes(searchQuery.toLowerCase()),
+  [searchQuery]);
+
+  const filteredLikes = likes.filter(matchesSearch);
+  const filteredUploads = uploads.filter(matchesSearch);
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: '#000' }}>
@@ -372,7 +379,9 @@ export default function LibraryScreen({ accessToken }) {
           </div>
         ) : (
           <>
-            <h1 style={{ fontSize: '26px', fontWeight: 900, letterSpacing: '-0.5px', color: '#fff', lineHeight: 1 }}>
+            {/* Spacer to balance the search icon on the right */}
+            <div style={{ width: '29px' }} />
+            <h1 style={{ fontSize: '26px', fontWeight: 900, letterSpacing: '-0.5px', color: '#fff', lineHeight: 1, flex: 1, textAlign: 'center' }}>
               Library
             </h1>
             <button
@@ -392,6 +401,7 @@ export default function LibraryScreen({ accessToken }) {
       {/* ── Tab bar ─────────────────────────────────────────────────────── */}
       <div style={{
         display: 'flex',
+        justifyContent: 'center',
         padding: '0 16px',
         marginTop: '10px',
         borderBottom: '1px solid #161616',
@@ -438,13 +448,13 @@ export default function LibraryScreen({ accessToken }) {
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
 
         {activeTab === 'liked' && (
-          isLoading ? (
+          likesLoading ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '220px' }}>
               <div style={{ color: '#374151', fontSize: '14px' }}>Loading…</div>
             </div>
-          ) : error ? (
+          ) : likesError ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '220px' }}>
-              <div style={{ color: '#E11D48', fontSize: '14px', textAlign: 'center', padding: '0 32px' }}>{error}</div>
+              <div style={{ color: '#E11D48', fontSize: '14px', textAlign: 'center', padding: '0 32px' }}>{likesError}</div>
             </div>
           ) : filteredLikes.length === 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '220px', gap: '10px' }}>
@@ -464,23 +474,75 @@ export default function LibraryScreen({ accessToken }) {
                 isPlaying={playingId === track.id && !paused}
                 progress={playingId === track.id ? progress : 0}
                 onToggle={() => handleWaveformToggle(track)}
-                onDownload={handleDownload}
+                actionSlot={
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDownload(track); }}
+                    aria-label="Download"
+                    style={{
+                      width: '30px', height: '30px', flexShrink: 0,
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#6B7280', padding: 0, borderRadius: '50%',
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7,10 12,15 17,10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                  </button>
+                }
               />
             ))
           )
         )}
 
         {activeTab === 'uploaded' && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '220px', gap: '10px' }}>
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#2a2a2a" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="16" x2="12" y2="8" />
-              <polyline points="8,12 12,8 16,12" />
-            </svg>
-            <div style={{ fontSize: '14px', color: '#374151', textAlign: 'center', lineHeight: 1.5, maxWidth: '200px' }}>
-              Your uploaded tracks will appear here.
+          uploadsLoading ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '220px' }}>
+              <div style={{ color: '#374151', fontSize: '14px' }}>Loading…</div>
             </div>
-          </div>
+          ) : uploadsError ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '220px' }}>
+              <div style={{ color: '#E11D48', fontSize: '14px', textAlign: 'center', padding: '0 32px' }}>{uploadsError}</div>
+            </div>
+          ) : filteredUploads.length === 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '220px', gap: '10px' }}>
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#2a2a2a" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="16" x2="12" y2="8" />
+                <polyline points="8,12 12,8 16,12" />
+              </svg>
+              <div style={{ fontSize: '14px', color: '#374151', textAlign: 'center', lineHeight: 1.5, maxWidth: '200px' }}>
+                {searchQuery ? 'No tracks match your search.' : 'Tracks you upload will appear here.'}
+              </div>
+            </div>
+          ) : (
+            filteredUploads.map((track) => (
+              <TrackRow
+                key={track.id}
+                track={track}
+                isActive={playingId === track.id}
+                isPlaying={playingId === track.id && !paused}
+                progress={playingId === track.id ? progress : 0}
+                onToggle={() => handleWaveformToggle(track)}
+                actionSlot={
+                  <div style={{
+                    width: '30px', flexShrink: 0,
+                    display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'center', gap: '2px',
+                  }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="#E11D48" stroke="#E11D48" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                    </svg>
+                    <span style={{ fontSize: '10px', color: '#9CA3AF', fontWeight: 500, lineHeight: 1 }}>
+                      {track.like_count}
+                    </span>
+                  </div>
+                }
+              />
+            ))
+          )
         )}
 
       </div>

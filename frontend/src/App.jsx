@@ -213,6 +213,39 @@ export default function App() {
     );
   }
 
+  // ── Chat screen ──
+  if (activeTab === 'chat') {
+    return (
+      <div style={{
+        height: '100%',
+        maxWidth: '430px',
+        margin: '0 auto',
+        background: '#000',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}>
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '12px',
+        }}>
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#2a2a2a" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+          <div style={{ fontSize: '18px', fontWeight: 700, color: '#fff' }}>Coming Soon :)</div>
+          <div style={{ fontSize: '13px', color: '#4B5563', textAlign: 'center', maxWidth: '200px', lineHeight: 1.5 }}>
+            Chat with other producers is on the way.
+          </div>
+        </div>
+        <NavBar activeTab={activeTab} onTabChange={setActiveTab} />
+      </div>
+    );
+  }
+
   // ── Profile screen ──
   if (activeTab === 'profile') {
     return (
