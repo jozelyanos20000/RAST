@@ -16,7 +16,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
  *   skipTrack     {function}     — mark current as seen, fetch next
  *   likeTrack     {function}     — mark current as seen (liked), fetch next
  */
-export function useTrackQueue(accessToken) {
+export function useTrackQueue(accessToken, { onCreditChange } = {}) {
   const [currentTrack, setCurrentTrack] = useState(null);
   const [seenIds, setSeenIds] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -56,12 +56,25 @@ export function useTrackQueue(accessToken) {
     }
   }, []);
 
-  // Fetch on first authentication (not on every token refresh)
+  // Fetch on first authentication (not on every token refresh).
+  // Seed seenIds with liked track IDs so they never reappear in the feed.
   const initialFetchDone = useRef(false);
   useEffect(() => {
     if (accessToken && !initialFetchDone.current) {
       initialFetchDone.current = true;
-      fetchNext([]);
+      fetch('/api/likes', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+        .then(res => (res.ok ? res.json() : []))
+        .then(likes => {
+          const likedIds = likes.map(l => l.id);
+          if (likedIds.length > 0) {
+            setSeenIds(likedIds);
+            seenIdsRef.current = likedIds;
+          }
+          fetchNext(likedIds);
+        })
+        .catch(() => fetchNext([]));
     }
   }, [fetchNext, accessToken]);
 
@@ -73,6 +86,14 @@ export function useTrackQueue(accessToken) {
 
   const skipTrack = useCallback(() => {
     if (!currentTrack) return;
+    fetch('/api/skips', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessTokenRef.current}`,
+      },
+      body: JSON.stringify({ track_id: currentTrack.id }),
+    }).catch(err => console.error('[useTrackQueue] skip failed:', err));
     advanceQueue(currentTrack.id);
   }, [currentTrack, advanceQueue]);
 
@@ -85,9 +106,13 @@ export function useTrackQueue(accessToken) {
         Authorization: `Bearer ${accessTokenRef.current}`,
       },
       body: JSON.stringify({ track_id: currentTrack.id }),
-    }).catch(err => console.error('[useTrackQueue] like failed:', err));
+    })
+      .then(res => {
+        if (res.ok && onCreditChange) onCreditChange();
+      })
+      .catch(err => console.error('[useTrackQueue] like failed:', err));
     advanceQueue(currentTrack.id);
-  }, [currentTrack, advanceQueue]);
+  }, [currentTrack, advanceQueue, onCreditChange]);
 
   return {
     currentTrack,

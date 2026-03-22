@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import SwipeCard from './components/SwipeCard.jsx';
 import NavBar from './components/NavBar.jsx';
 import UploadScreen from './components/UploadScreen.jsx';
@@ -136,12 +136,29 @@ function ExhaustedCard() {
  *   5. exitDir resets to null; hook fetches next track; key change re-mounts card
  */
 export default function App() {
-  const { accessToken, isLoading: authLoading, login, register, logout } = useAuth();
+  const { accessToken, credits, isLoading: authLoading, login, register, logout, refreshCredits } = useAuth();
   const [authView, setAuthView] = useState('login'); // 'login' | 'register'
   const [activeTab, setActiveTab] = useState('discover');
+  const [toast, setToast] = useState(null);
+  const toastTimerRef = useRef(null);
+
+  const showToast = useCallback((message) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast(message);
+    toastTimerRef.current = setTimeout(() => setToast(null), 3500);
+  }, []);
+
+  useEffect(() => {
+    return () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); };
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    logout();
+    setActiveTab('discover');
+  }, [logout]);
 
   const { currentTrack, isLoading, isExhausted, skipTrack, likeTrack } =
-    useTrackQueue(accessToken);
+    useTrackQueue(accessToken, { onCreditChange: refreshCredits });
 
   // 'left' | 'right' | null — drives the card exit animation
   const [exitDir, setExitDir] = useState(null);
@@ -157,9 +174,13 @@ export default function App() {
 
   const handleLike = useCallback(() => {
     if (!currentTrack || exitDir) return;
+    if (credits < 1) {
+      showToast("You're out of credits, upload a loop to earn more");
+      return;
+    }
     pendingActionRef.current = likeTrack;
     setExitDir('right');
-  }, [currentTrack, exitDir, likeTrack]);
+  }, [currentTrack, exitDir, likeTrack, credits, showToast]);
 
   const handleExited = useCallback(() => {
     if (pendingActionRef.current) {
@@ -258,7 +279,7 @@ export default function App() {
         flexDirection: 'column',
         overflow: 'hidden',
       }}>
-        <ProfileScreen accessToken={accessToken} onLogout={logout} />
+        <ProfileScreen accessToken={accessToken} onLogout={handleLogout} credits={credits} />
         <NavBar activeTab={activeTab} onTabChange={setActiveTab} />
       </div>
     );
@@ -277,6 +298,7 @@ export default function App() {
         <UploadScreen
           onBack={() => setActiveTab('discover')}
           accessToken={accessToken}
+          refreshCredits={refreshCredits}
         />
       </div>
     );
@@ -294,6 +316,54 @@ export default function App() {
       position: 'relative',
       overflow: 'hidden',
     }}>
+
+      {/* Credit badge (top right) */}
+      <div style={{
+        position: 'absolute',
+        top: '20px',
+        right: '20px',
+        zIndex: 30,
+        background: 'rgba(255,255,255,0.1)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        border: '1px solid rgba(255,255,255,0.12)',
+        borderRadius: '9999px',
+        padding: '4px 12px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '5px',
+      }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="#D97706" stroke="none">
+          <circle cx="12" cy="12" r="10"/>
+        </svg>
+        <span style={{
+          fontSize: '12px',
+          fontWeight: 700,
+          color: '#fff',
+          lineHeight: 1,
+        }}>{credits}</span>
+      </div>
+
+      {/* Toast notification */}
+      {toast && (
+        <div style={{
+          position: 'absolute',
+          top: '56px',
+          left: '20px',
+          right: '20px',
+          zIndex: 40,
+          background: 'rgba(30,30,30,0.95)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: '12px',
+          padding: '12px 16px',
+          fontSize: '13px',
+          fontWeight: 600,
+          color: '#fff',
+          textAlign: 'center',
+        }}>{toast}</div>
+      )}
 
       {/* Card container */}
       <div style={{

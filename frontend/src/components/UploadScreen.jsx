@@ -28,7 +28,7 @@ const GENRE_OPTIONS = [
   'Drill', 'Afrobeats', 'Lo-fi', 'Jazz', 'Soul', 'Other',
 ];
 
-export default function UploadScreen({ onBack, accessToken }) {
+export default function UploadScreen({ onBack, accessToken, refreshCredits }) {
   const [audioFile, setAudioFile] = useState(null);
   const [artwork, setArtwork] = useState(null);
   const [artworkPreview, setArtworkPreview] = useState(null);
@@ -126,13 +126,14 @@ export default function UploadScreen({ onBack, accessToken }) {
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Upload failed.');
+      if (refreshCredits) refreshCredits();
       onBack();
     } catch (err) {
       setError(err.message || 'Something went wrong. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
-  }, [audioFile, artwork, title, description, bpm, key, genre, tags, onBack]);
+  }, [audioFile, artwork, title, description, bpm, key, genre, tags, onBack, refreshCredits]);
 
   // ── Shared styles ──
   const cardStyle = {

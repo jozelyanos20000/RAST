@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 const ACCENT_COLORS = ['#7C3AED', '#0D9488', '#D97706', '#E11D48', '#2563EB', '#EA580C'];
 
-export default function ProfileScreen({ accessToken, onLogout }) {
+export default function ProfileScreen({ accessToken, onLogout, credits }) {
   const [user, setUser] = useState(null);
   const [error, setError] = useState(null);
   const [signingOut, setSigningOut] = useState(false);
@@ -102,6 +102,29 @@ export default function ProfileScreen({ accessToken, onLogout }) {
             <div style={{ fontSize: '17px', fontWeight: 700, color: '#fff' }}>
               {user.email}
             </div>
+          </div>
+
+          {/* Credits row */}
+          <div style={{
+            background: '#0f0f0f',
+            border: '1px solid #1e1e1e',
+            borderRadius: '14px',
+            padding: '16px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
+                Credits
+              </div>
+              <div style={{ fontSize: '17px', fontWeight: 700, color: '#fff' }}>
+                {credits != null ? credits : '—'}
+              </div>
+            </div>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="#D97706" stroke="none">
+              <circle cx="12" cy="12" r="10"/>
+            </svg>
           </div>
         </div>
       )}
