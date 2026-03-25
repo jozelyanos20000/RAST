@@ -17,7 +17,7 @@ from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from database import (
-    init_db, add_upload, get_random_track,
+    init_db, DB_PATH, add_upload, get_random_track,
     create_user, get_user_by_email_or_username, get_user_by_id,
     add_like, remove_like, get_likes_by_user, get_user_uploads_with_likes,
     get_user_credits, record_skip, get_upload_by_id,
@@ -352,6 +352,16 @@ if _is_production:
         return send_from_directory(_DIST_DIR, "index.html")
 
 
+init_db()
 if __name__ == "__main__":
-    init_db()
+    @app.route("/api/debug")
+    def debug():
+        import sqlite3
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+            conn.close()
+            return jsonify(db_path=DB_PATH, tables=[t[0] for t in tables])
+        except Exception as e:
+            return jsonify(error=str(e), db_path=DB_PATH)
     app.run(debug=True)
