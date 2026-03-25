@@ -2,7 +2,8 @@ import os
 import uuid
 from datetime import timedelta
 
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
 from flask_jwt_extended import (
     JWTManager,
     create_access_token,
@@ -16,9 +17,10 @@ from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from database import (
-    init_db, add_upload, get_all_uploads, get_random_track,
-    create_user, get_user_by_email, get_user_by_email_or_username, get_user_by_id,
+    init_db, add_upload, get_random_track,
+    create_user, get_user_by_email_or_username, get_user_by_id,
     add_like, remove_like, get_likes_by_user, get_user_uploads_with_likes,
+    get_user_credits, record_skip, get_upload_by_id,
 )
 
 UPLOAD_FOLDER = os.path.join("static", "uploads")
@@ -26,10 +28,21 @@ ARTWORK_FOLDER = os.path.join("static", "artwork")
 ALLOWED_EXTENSIONS = {"mp3", "wav"}
 ALLOWED_IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "webp"}
 
+_is_production = os.environ.get("FLASK_ENV") == "production"
+
 app = Flask(__name__)
-app.secret_key = "x7k$mQ2#pL9"
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-key-CHANGE-IN-PROD")
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["MAX_CONTENT_LENGTH"] = 64 * 1024 * 1024  # 64 MB
+
+# ── CORS ──────────────────────────────────────────────────────────────────
+_default_origins = ["http://localhost:5173", "http://localhost:5000"]
+_extra_origins = [
+    o.strip()
+    for o in os.environ.get("CORS_ORIGINS", "").split(",")
+    if o.strip()
+]
+CORS(app, origins=_default_origins + _extra_origins, supports_credentials=True)
 
 # ── JWT configuration ──────────────────────────────────────────────────────
 app.config["JWT_SECRET_KEY"] = os.environ.get(
@@ -38,8 +51,8 @@ app.config["JWT_SECRET_KEY"] = os.environ.get(
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=15)
 app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=30)
 app.config["JWT_TOKEN_LOCATION"] = ["headers", "cookies"]
-app.config["JWT_COOKIE_SECURE"] = False          # True in production (HTTPS)
-app.config["JWT_COOKIE_CSRF_PROTECT"] = False    # Add CSRF protection in production
+app.config["JWT_COOKIE_SECURE"] = _is_production
+app.config["JWT_COOKIE_CSRF_PROTECT"] = False
 app.config["JWT_COOKIE_SAMESITE"] = "Lax"
 
 jwt = JWTManager(app)
@@ -75,36 +88,6 @@ def allowed_file(filename):
 
 def allowed_image(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
-
-
-# ── Legacy routes (to be deprecated) ──────────────────────────────────────
-
-@app.route("/")
-def index():
-    uploads = get_all_uploads()
-    return render_template("index.html", uploads=uploads)
-
-
-@app.route("/upload", methods=["POST"])
-def upload():
-    if "audio" not in request.files:
-        flash("No file selected.")
-        return redirect(url_for("index"))
-    file = request.files["audio"]
-    if file.filename == "":
-        flash("No file selected.")
-        return redirect(url_for("index"))
-    if not allowed_file(file.filename):
-        flash("Invalid file type. Allowed types: mp3, wav.")
-        return redirect(url_for("index"))
-    original_name = file.filename
-    safe_name = secure_filename(original_name)
-    stored_filename = f"{uuid.uuid4().hex}_{safe_name}"
-    os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
-    file.save(os.path.join(app.config["UPLOAD_FOLDER"], stored_filename))
-    add_upload(stored_filename, original_name)
-    flash(f'"{original_name}" uploaded successfully!')
-    return redirect(url_for("index"))
 
 
 # ── Auth endpoints ─────────────────────────────────────────────────────────
@@ -235,7 +218,14 @@ def me():
     user = get_user_by_id(int(get_jwt_identity()))
     if user is None:
         return jsonify(error="User not found"), 404
-    return jsonify(username=user["username"], email=user["email"])
+    return jsonify(username=user["username"], email=user["email"], credits=user["credits"])
+
+
+@app.route("/api/credits")
+@jwt_required(locations=["headers"])
+def credits():
+    user_id = int(get_jwt_identity())
+    return jsonify(credits=get_user_credits(user_id))
 
 
 @app.route("/api/likes", methods=["GET"])
@@ -267,7 +257,18 @@ def post_like():
     track_id = data.get("track_id")
     if not track_id:
         return jsonify(error="track_id is required"), 400
-    add_like(user_id, int(track_id))
+    track_id = int(track_id)
+    track = get_upload_by_id(track_id)
+    if track is None:
+        return jsonify(error="track_not_found"), 404
+    if track["user_id"] == user_id:
+        return jsonify(error="cannot_like_own_track"), 400
+    try:
+        add_like(user_id, track_id)
+    except ValueError as exc:
+        if "insufficient_credits" in str(exc):
+            return jsonify(error="insufficient_credits"), 402
+        raise
     return jsonify(success=True)
 
 
@@ -300,6 +301,18 @@ def my_uploads():
     } for r in rows])
 
 
+@app.route("/api/skips", methods=["POST"])
+@jwt_required(locations=["headers"])
+def post_skip():
+    user_id = int(get_jwt_identity())
+    data = request.get_json(silent=True) or {}
+    track_id = data.get("track_id")
+    if not track_id:
+        return jsonify(error="track_id is required"), 400
+    record_skip(user_id, int(track_id))
+    return jsonify(success=True)
+
+
 @app.route("/api/random-track")
 @jwt_required(locations=["headers"])
 def random_track():
@@ -323,6 +336,20 @@ def random_track():
         "uploaded_at":   track["uploaded_at"],
         "uploaded_by":   track["uploaded_by"],
     })
+
+
+# ── Serve React production build ──────────────────────────────────────────
+
+_DIST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend", "dist")
+
+if _is_production:
+    @app.route("/", defaults={"path": ""})
+    @app.route("/<path:path>")
+    def serve_react(path):
+        full = os.path.join(_DIST_DIR, path)
+        if path and os.path.isfile(full):
+            return send_from_directory(_DIST_DIR, path)
+        return send_from_directory(_DIST_DIR, "index.html")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { API_BASE } from '../config';
 
 const ACCENT_COLORS = ['#7C3AED', '#0D9488', '#D97706', '#E11D48', '#2563EB', '#EA580C'];
 
@@ -8,7 +9,7 @@ export default function ProfileScreen({ accessToken, onLogout, credits }) {
   const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
-    fetch('/api/me', {
+    fetch(`${API_BASE}/api/me`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     })
       .then((r) => r.json())

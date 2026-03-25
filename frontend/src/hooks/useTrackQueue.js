@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { API_BASE } from '../config';
 
 /**
  * useTrackQueue — Manages the track discovery queue.
@@ -35,7 +36,7 @@ export function useTrackQueue(accessToken, { onCreditChange } = {}) {
     setIsLoading(true);
     try {
       const query = ids.length > 0 ? `?seen=${ids.join(',')}` : '';
-      const res = await fetch(`/api/random-track${query}`, {
+      const res = await fetch(`${API_BASE}/api/random-track${query}`, {
         headers: { Authorization: `Bearer ${accessTokenRef.current}` },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -62,7 +63,7 @@ export function useTrackQueue(accessToken, { onCreditChange } = {}) {
   useEffect(() => {
     if (accessToken && !initialFetchDone.current) {
       initialFetchDone.current = true;
-      fetch('/api/likes', {
+      fetch(`${API_BASE}/api/likes`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       })
         .then(res => (res.ok ? res.json() : []))
@@ -86,7 +87,7 @@ export function useTrackQueue(accessToken, { onCreditChange } = {}) {
 
   const skipTrack = useCallback(() => {
     if (!currentTrack) return;
-    fetch('/api/skips', {
+    fetch(`${API_BASE}/api/skips`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -99,7 +100,7 @@ export function useTrackQueue(accessToken, { onCreditChange } = {}) {
 
   const likeTrack = useCallback(() => {
     if (!currentTrack) return;
-    fetch('/api/likes', {
+    fetch(`${API_BASE}/api/likes`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

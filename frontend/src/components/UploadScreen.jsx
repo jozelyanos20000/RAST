@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import { API_BASE } from '../config';
 import Cropper from 'react-easy-crop';
 import 'react-easy-crop/react-easy-crop.css';
 
@@ -119,7 +120,7 @@ export default function UploadScreen({ onBack, accessToken, refreshCredits }) {
       fd.append('genre', genre === 'None' ? '' : genre);
       fd.append('tags', tags.join(','));
 
-      const res = await fetch('/api/upload', {
+      const res = await fetch(`${API_BASE}/api/upload`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${accessToken}` },
         body: fd,

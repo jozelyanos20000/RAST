@@ -35,6 +35,18 @@ npm run build    # production build
 npm run lint     # ESLint
 npm run preview  # preview production build
 ```
+### Tests
+Run from the project root (`RAST/`):
+```bash
+py -m pytest                              # all tests
+py -m pytest tests/test_api.py::TestAuth  # single test class
+py -m pytest -k "test_login"              # by name pattern
+```
+79 tests across 13 classes. All must pass before deployment.
+
+Tests are fully isolated: each test gets a fresh SQLite DB and
+upload/artwork dirs in `tmp_path` via monkeypatch (see `tests/conftest.py`).
+No test touches the real `rast.db` or `static/` directory.
 
 ### Important: CORS / Proxy
 Vite proxy is configured in `frontend/vite.config.js` pointing
@@ -52,15 +64,19 @@ Vite proxy is configured in `frontend/vite.config.js` pointing
 ## Project Structure
 ```
 RAST/
-├── app.py              # Flask API — all backend routes
-├── database.py         # SQLite connection and query functions
-├── requirements.txt    # Python dependencies
-├── rast.db             # SQLite database
-├── references/         # UI reference screenshots
+├── app.py
+├── database.py
+├── requirements.txt
+├── pytest.ini
+├── rast.db
+├── references/
 ├── static/
-│   ├── uploads/        # Stored audio files on disk
-│   └── artwork/        # Stored artwork images on disk
-└── frontend/           # React + Vite app
+│   ├── uploads/
+│   └── artwork/
+├── tests/
+│   ├── conftest.py
+│   └── test_api.py
+└── frontend/
     ├── vite.config.js
     ├── package.json
     └── src/
@@ -92,23 +108,21 @@ Access tokens expire in 15 min; `useAuth` proactively refreshes every 14 min
 via `POST /api/auth/refresh` using the httpOnly cookie.
 
 ### Navigation
-There is no React Router. Screen routing is done with `activeTab` state in
-`App.jsx` — values: `'discover'`, `'upload'`, `'library'`, `'profile'`. The
-nav bar calls `setActiveTab`; each screen renders conditionally.
+No React Router. Screen routing uses `activeTab` state in `App.jsx`.
+Values: `'discover'`, `'upload'`, `'library'`, `'profile'`.
 
 ### Swipe animation flow
-1. User presses Skip or Like → `exitDir` set to `'left'`/`'right'`
+1. User presses Skip or Like — `exitDir` set to `'left'`/`'right'`
 2. `SwipeCard` runs CSS exit animation, fires `onExited` when done
 3. `pendingActionRef.current()` calls `skipTrack`/`likeTrack` from `useTrackQueue`
 4. `exitDir` resets to null; hook fetches next track; `key={track.id}` re-mounts card
 
 `useTrackQueue` maintains a `seenIds` array passed as `?seen=` to prevent
-repeat tracks. Swipe right calls `POST /api/likes` to persist the like.
+repeat tracks. Swipe left calls `POST /api/skips`. Swipe right calls `POST /api/likes`.
 
 ## Known Issues / Tech Debt
 - `GET /` and `POST /upload` in `app.py` still use `render_template`,
-  `flash`, and `redirect` — legacy Jinja behavior that must be
-  refactored to return JSON responses.
+  `flash`, and `redirect` — legacy Jinja behavior to be refactored.
 
 ## Flask API Endpoints
 
@@ -119,21 +133,19 @@ repeat tracks. Swipe right calls `POST /api/likes` to persist the like.
 - `POST /api/auth/logout` — clears refresh token cookie
 
 ### Protected (require Bearer token)
-- `GET /api/me` — returns `{username, email}` for the authenticated user
+- `GET /api/me` — returns `{username, email, credits}` for the authenticated user
+- `GET /api/credits` — returns `{credits: <int>}` for the current user
 - `POST /api/upload` — accepts audio file + metadata, returns `{"success": true, "id": <int>}`
-- `GET /api/random-track?seen=1,2,3` — returns random track JSON excluding current user's uploads
+- `GET /api/random-track?seen=1,2,3` — returns random track JSON excluding current user's uploads, liked tracks (permanent), skipped tracks (5 day cooldown)
 - `GET /api/likes` — returns all tracks liked by the current user with full metadata
-- `POST /api/likes` — `{track_id}` → `{"success": true}` — records a like
+- `POST /api/likes` — `{track_id}` → `{"success": true}` — deducts 1 credit, records like
 - `DELETE /api/likes/<track_id>` — removes a like (future use)
-- `GET /api/my-uploads` — returns all tracks uploaded by the current user, each with a `like_count` field
+- `GET /api/my-uploads` — returns all tracks uploaded by the current user with `like_count`
+- `POST /api/skips` — `{track_id}` → `{"success": true}` — records or resets a skip
 
 ### Legacy (to be deprecated)
 - `GET /` — legacy Jinja route
 - `POST /upload` — legacy Jinja form-upload route
-
-### `/api/upload` form fields
-`audio` (file, required), `artwork` (file, optional — jpg/jpeg/png/webp),
-`title`, `bpm`, `key`, `genre`, `tags` (comma-separated, max 3).
 
 ### `/api/random-track` response
 ```json
@@ -143,19 +155,6 @@ repeat tracks. Swipe right calls `POST /api/likes` to persist the like.
   "genre": "Hip Hop", "tags": "dark,groovy", "artwork": "uuid_art.jpg",
   "uploaded_at": "...", "uploaded_by": "username"
 }
-```
-Audio served at `/static/uploads/<filename>`, artwork at `/static/artwork/<filename>`.
-
-### `/api/likes` response
-```json
-[
-  {
-    "id": 1, "filename": "uuid_name.wav", "original_name": "name.wav",
-    "title": "My Loop", "description": "...", "bpm": 95, "key": "E minor",
-    "genre": "Hip Hop", "tags": "dark,groovy", "artwork": "uuid_art.jpg",
-    "uploaded_by": "username", "liked_at": "..."
-  }
-]
 ```
 
 ## Database Schema
@@ -170,6 +169,7 @@ CREATE TABLE users (
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )
 ```
+Note: `credits INTEGER NOT NULL DEFAULT 0` added via `_migrate()`.
 
 ### uploads
 ```sql
@@ -199,26 +199,45 @@ CREATE TABLE likes (
     UNIQUE(user_id, track_id)
 )
 ```
-`UNIQUE(user_id, track_id)` prevents a user from liking the same track twice.
-Add new columns/tables via `_migrate()` in `database.py` — never drop or
-recreate existing tables. The `uploads` table's `description` and `user_id`
-columns were added this way and are absent from the original `CREATE TABLE`.
+
+### skips
+```sql
+CREATE TABLE skips (
+    user_id    INTEGER REFERENCES users(id),
+    track_id   INTEGER REFERENCES uploads(id),
+    skipped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, track_id)
+)
+```
+Tracks skipped within the last 5 days are excluded from the feed.
+Re-skipping a track resets `skipped_at` to extend the cooldown.
+
+### credit_transactions
+```sql
+CREATE TABLE credit_transactions (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER REFERENCES users(id),
+    amount     INTEGER NOT NULL,
+    reason     TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+```
+`amount` is positive for credits earned, negative for credits spent.
+`reason` values: `'signup'`, `'upload'`, `'like_received'`, `'swipe_right'`
+
+Add new columns/tables via `_migrate()` — never drop or recreate existing tables.
 All DB access goes through `database.py`. Never write SQL in `app.py`.
 
 ### Seed Account
-Existing tracks (uploaded before auth) are assigned to a seed account:
-- Username: `rast_seed`
-- Email: `seed@rast.app`
-- Password: env var `RAST_SEED_PASSWORD` (default: `RastSeed#2024!` — change in production)
+- Username: `rast_seed` / Email: `seed@rast.app`
+- Password: env var `RAST_SEED_PASSWORD` (default: `RastSeed#2024!`)
 
 ### Tags
-- Stored as comma-separated string (e.g. `"dark,groovy,drake type"`)
-- Maximum 3 tags per track
-- Enforced at application level, not database level
+- Comma-separated string, max 3 tags, enforced at application level
 
 ## Auth Rules
-- JWT access tokens stored in React memory only (never localStorage)
-- Refresh tokens stored in httpOnly cookies (XSS safe)
+- JWT access tokens in React memory only (never localStorage)
+- Refresh tokens in httpOnly cookies (XSS safe)
 - All routes except `/api/auth/*` require valid Bearer token
 - Unauthenticated users see only Login/Register screens
 - No social login — email and password only
@@ -226,110 +245,90 @@ Existing tracks (uploaded before auth) are assigned to a seed account:
 
 ## Design System
 - Mobile-first, responsive for desktop
-- Dark aesthetic throughout
-- Background: `#000000` pure black
+- Dark aesthetic, background `#000000`
 - Card accent colors (cycle by track ID % 6):
-  - Purple: `#7C3AED`
-  - Teal: `#0D9488`
-  - Amber: `#D97706`
-  - Rose: `#E11D48`
-  - Blue: `#2563EB`
-  - Orange: `#EA580C`
+  - Purple `#7C3AED`, Teal `#0D9488`, Amber `#D97706`
+  - Rose `#E11D48`, Blue `#2563EB`, Orange `#EA580C`
 - Typography: bold and heavy for track names
 - Card corner radius: 20px
-- Fallback card background: pure black with centered waveform
-  graphic tinted in track accent color
+- Fallback card: pure black with waveform graphic tinted in accent color
 
-## Main Card UI Spec
-- Full screen card (mobile viewport)
-- Background: artwork image if uploaded, else fallback waveform graphic
-- Dark gradient overlay bottom-up for text readability
+## Screen Specs
+
+### Main Card (Discover)
+- Full screen card, mobile viewport
+- Background: artwork image or fallback waveform graphic
+- Dark gradient overlay bottom-up
 - Top: audio progress bar
-- Bottom left: track name (large, bold), vibe tags as pills below
-- Bottom right: upward arrow button (stems purchase — placeholder)
-- Bottom nav bar: 5 icons (X and heart functional, 3 placeholder)
+- Top right: credit balance (small, unobtrusive)
+- Bottom left: track name (large bold), vibe tags as pills below
+- Bottom right: upward arrow button (stems — placeholder)
+- Buttons: X (skip, free) and heart (like, costs 1 credit) overlaid on card
+- Bottom nav bar: 5 icons
 
-## Upload Screen Spec
+### Upload Screen
 - Full screen scrollable form, mobile-first
-- Dark card sections matching the design system
-- Two sections: Basic Info and Metadata
-- Basic Info section:
-  - Audio file upload at the top (MP3 and WAV only, 64MB max)
-  - Artwork image upload on the left, Title text field on the right
-  - Optional Description text field below
-- Metadata section:
-  - Key dropdown and BPM number field side by side
-  - Genre selector below
-  - Tags field: type and press enter to add, max 3 tags,
-    displayed as removable pills
-- Submit button at the bottom
-- On successful submit: return to Discover screen
-- On error: display inline error message, do not navigate away
-- Connected to `POST /api/upload` endpoint
+- Basic Info: audio upload, artwork + title side by side, description
+- Metadata: key + BPM side by side, genre, tags (max 3, pill style)
+- Submit → Discover on success, inline error on failure
+- Connected to `POST /api/upload`
 
-## Auth Screen Spec
-- Login and Register screens replace the app entirely when logged out
-- Mobile-first, full screen, dark aesthetic matching design system
-- Login: email or username + password fields, submit button, link to Register
-- Register: username + email + password fields, submit button, link to Login
-- On successful login/register: land on Discover screen
-- On error: inline error message below the relevant field
-- No social login buttons
+### Auth Screens
+- Login and Register replace the app when logged out
+- Login: email or username + password, link to Register
+- Register: username + email + password, link to Login
+- Success → Discover screen
 
-## Library Screen Spec
-- Two tabs at top center: 'Liked' and 'Uploaded'
-- Active tab: white text with white underline indicator
-- Inactive tab: muted gray text
-- Search icon top right — tapping opens inline text input, filters by title client-side
-- Default active tab: Liked
+### Library Screen
+- Two tabs top center: Liked (default) and Uploaded
+- Search icon top right, filters by title client-side
+- Liked tab: fetches `GET /api/likes`, download button per row
+- Uploaded tab: fetches `GET /api/my-uploads`, heart + like count per row
+- Each row: artwork thumbnail, title + tags, audio progress bar, key + BPM
 
-### Liked Tab
-- Fetches from `GET /api/likes`
-- Each row contains:
-  - Small square artwork thumbnail (fallback: accent color square)
-  - Track title in white, tags below in muted small text
-  - Audio progress bar in center, clickable to play/pause
-  - Key and BPM columns on the right in muted text
-  - Download button (arrow-down icon) far right — triggers direct download of audio file
-- Ordered by `liked_at` descending
+### Profile Screen
+- Circle avatar with user's first initial
+- Username, email, credit balance (display only)
+- Sign Out button
 
-### Uploaded Tab
-- Fetches from `GET /api/my-uploads`
-- Each row identical to Liked tab except:
-  - Heart icon + like count replaces the download button
-  - Shows `0` if no likes yet
-- Ordered by `uploaded_at` descending
-```
-## Profile Screen Spec
-- Circle avatar placeholder showing user's first initial
-- Username (display only)
-- Email (display only)
-- Sign Out button — calls `POST /api/auth/logout`, clears auth state, redirects to Login
+## Credit System
+
+### Rules
+- New user registration → +10 credits (`'signup'`)
+- Upload a loop → +1 credit (`'upload'`)
+- Receive a like → +1 credit (`'like_received'`)
+- Swipe right → -1 credit (`'swipe_right'`)
+- Swipe left → free
+- Credits never go below 0
+- No monthly reset for beta
+
+### Backend
+- All credit changes via `add_credit_transaction(user_id, amount, reason)` in `database.py`
+- Updates `users.credits` and inserts into `credit_transactions` atomically
+- `POST /api/likes` returns `{"error": "insufficient_credits"}` with 402 if credits = 0
+
+### UI
+- Credit balance shown top right of Discover screen and on Profile screen
+- Toast notification when credits = 0: "You're out of credits, upload a loop to earn more"
+- Swipe right blocked at 0 credits
 
 ## Bottom Nav Icons (left to right)
-1. Discover (current view)
-2. Upload
-3. Library
-4. Chat
-5. Profile
+1. Discover, 2. Upload, 3. Library, 4. Chat, 5. Profile
 
-## Out of Scope (do not build yet)
-- Credit system
+## Out of Scope
 - Drag gesture swiping
 - Stem purchasing
 - Chat functionality
 - Filters
 
 ## Rules
-- Never break existing upload or database functionality
-- Never simplify architecture for beginner-friendliness
-- Always mobile-first, then scale up for desktop
+- Never break existing functionality
+- Never simplify for beginner-friendliness
 - Flask serves JSON only — never HTML
-- All new UI goes in React, never in Flask templates
-- Commit to the design system above, do not invent new colors
-- Tags field stores max 3 comma-separated vibe tags
-- All DB access goes through database.py, never raw SQL in app.py
-- Artwork files saved to static/artwork/, audio files to static/uploads/
-- JWT access tokens in React memory only, never localStorage
-- Refresh tokens in httpOnly cookies only
-- likes table has UNIQUE(user_id, track_id) — never duplicate likes
+- All UI in React, never in Flask templates
+- Design system colors only — never invent new ones
+- All DB access through database.py only
+- JWT tokens: access in memory, refresh in httpOnly cookies
+- likes UNIQUE(user_id, track_id) — no duplicate likes
+- credits never below 0
+- skips cooldown is 5 days — exclude via `skipped_at > datetime('now', '-5 days')`

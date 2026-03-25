@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { API_BASE } from '../config';
 
 const ACCENT_COLORS = ['#7C3AED', '#0D9488', '#D97706', '#E11D48', '#2563EB', '#EA580C'];
 const DIM_BAR = '#2e3d50';
@@ -206,7 +207,7 @@ export default function LibraryScreen({ accessToken }) {
   useEffect(() => {
     if (activeTab !== 'liked') return;
     let cancelled = false;
-    fetch('/api/likes', {
+    fetch(`${API_BASE}/api/likes`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     })
       .then((r) => r.json())
@@ -233,7 +234,7 @@ export default function LibraryScreen({ accessToken }) {
   useEffect(() => {
     if (activeTab !== 'uploaded') return;
     let cancelled = false;
-    fetch('/api/my-uploads', {
+    fetch(`${API_BASE}/api/my-uploads`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     })
       .then((r) => r.json())

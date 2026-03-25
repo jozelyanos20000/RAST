@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { API_BASE } from '../config';
 
 /** Access tokens live for 15 min; proactively refresh every 14 min */
 const REFRESH_INTERVAL_MS = 14 * 60 * 1000;
@@ -15,7 +16,7 @@ export function useAuth() {
     const token = accessTokenRef.current;
     if (!token) return;
     try {
-      const res = await fetch('/api/credits', {
+      const res = await fetch(`${API_BASE}/api/credits`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -27,7 +28,7 @@ export function useAuth() {
 
   const fetchCreditsWithToken = useCallback(async (token) => {
     try {
-      const res = await fetch('/api/credits', {
+      const res = await fetch(`${API_BASE}/api/credits`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -42,7 +43,7 @@ export function useAuth() {
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     refreshTimerRef.current = setTimeout(async () => {
       try {
-        const res = await fetch('/api/auth/refresh', {
+        const res = await fetch(`${API_BASE}/api/auth/refresh`, {
           method: 'POST',
           credentials: 'include',
         });
@@ -65,7 +66,7 @@ export function useAuth() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch('/api/auth/refresh', {
+        const res = await fetch(`${API_BASE}/api/auth/refresh`, {
           method: 'POST',
           credentials: 'include',
         });
@@ -87,7 +88,7 @@ export function useAuth() {
 
   // ── Auth actions ─────────────────────────────────────────────────────────
   const login = useCallback(async (email, password) => {
-    const res = await fetch('/api/auth/login', {
+    const res = await fetch(`${API_BASE}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -102,7 +103,7 @@ export function useAuth() {
   }, [scheduleRefresh, fetchCreditsWithToken]);
 
   const register = useCallback(async (username, email, password) => {
-    const res = await fetch('/api/auth/register', {
+    const res = await fetch(`${API_BASE}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -119,7 +120,7 @@ export function useAuth() {
   const logout = useCallback(async () => {
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     try {
-      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+      await fetch(`${API_BASE}/api/auth/logout`, { method: 'POST', credentials: 'include' });
     } catch { /* ignore */ }
     setAccessToken(null);
     accessTokenRef.current = null;
