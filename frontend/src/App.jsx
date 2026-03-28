@@ -77,7 +77,7 @@ function SkeletonCard() {
 /**
  * ExhaustedCard — shown when the user has heard all available tracks.
  */
-function ExhaustedCard() {
+function ExhaustedCard({ onRefresh }) {
   return (
     <div style={{
       flex: 1,
@@ -116,6 +116,24 @@ function ExhaustedCard() {
       }}>
         Upload your own loops to discover more from other producers.
       </div>
+      {onRefresh && (
+        <button
+          onClick={onRefresh}
+          style={{
+            marginTop: '8px',
+            padding: '10px 28px',
+            borderRadius: '9999px',
+            border: '1px solid rgba(124,58,237,0.5)',
+            background: 'rgba(124,58,237,0.15)',
+            color: '#A78BFA',
+            fontSize: '14px',
+            fontWeight: 700,
+            cursor: 'pointer',
+          }}
+        >
+          Refresh Feed
+        </button>
+      )}
     </div>
   );
 }
@@ -157,8 +175,17 @@ export default function App() {
     setActiveTab('discover');
   }, [logout]);
 
-  const { currentTrack, isLoading, isExhausted, skipTrack, likeTrack } =
+  const { currentTrack, isLoading, isExhausted, skipTrack, likeTrack, resetQueue } =
     useTrackQueue(accessToken, { onCreditChange: refreshCredits });
+
+  // Reset discover feed when navigating back to the Discover tab
+  const prevTabRef = useRef(activeTab);
+  useEffect(() => {
+    if (activeTab === 'discover' && prevTabRef.current !== 'discover') {
+      resetQueue();
+    }
+    prevTabRef.current = activeTab;
+  }, [activeTab, resetQueue]);
 
   // 'left' | 'right' | null — drives the card exit animation
   const [exitDir, setExitDir] = useState(null);
@@ -376,7 +403,7 @@ export default function App() {
         {isLoading && !currentTrack ? (
           <SkeletonCard />
         ) : isExhausted ? (
-          <ExhaustedCard />
+          <ExhaustedCard onRefresh={resetQueue} />
         ) : currentTrack ? (
           <SwipeCard
             key={currentTrack.id}

@@ -57,27 +57,54 @@ export function useTrackQueue(accessToken, { onCreditChange } = {}) {
     }
   }, []);
 
-  // Fetch on first authentication (not on every token refresh).
-  // Seed seenIds with liked track IDs so they never reappear in the feed.
+  // Reset all state when the user logs out (accessToken → null).
+  // This ensures a subsequent login starts with a clean queue.
   const initialFetchDone = useRef(false);
+  useEffect(() => {
+    if (!accessToken) {
+      setSeenIds([]);
+      seenIdsRef.current = [];
+      setCurrentTrack(null);
+      setIsExhausted(false);
+      setIsLoading(true);
+      initialFetchDone.current = false;
+    }
+  }, [accessToken]);
+
+  // Seed seenIds with liked track IDs, then fetch the first track.
+  // Runs once per session (guarded by initialFetchDone ref, reset on logout).
+  const _seedAndFetch = useCallback(() => {
+    fetch(`${API_BASE}/api/likes`, {
+      headers: { Authorization: `Bearer ${accessTokenRef.current}` },
+    })
+      .then(res => (res.ok ? res.json() : []))
+      .then(likes => {
+        const likedIds = likes.map(l => l.id);
+        setSeenIds(likedIds);
+        seenIdsRef.current = likedIds;
+        fetchNext(likedIds);
+      })
+      .catch(() => fetchNext([]));
+  }, [fetchNext]);
+
   useEffect(() => {
     if (accessToken && !initialFetchDone.current) {
       initialFetchDone.current = true;
-      fetch(`${API_BASE}/api/likes`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      })
-        .then(res => (res.ok ? res.json() : []))
-        .then(likes => {
-          const likedIds = likes.map(l => l.id);
-          if (likedIds.length > 0) {
-            setSeenIds(likedIds);
-            seenIdsRef.current = likedIds;
-          }
-          fetchNext(likedIds);
-        })
-        .catch(() => fetchNext([]));
+      _seedAndFetch();
     }
-  }, [fetchNext, accessToken]);
+  }, [_seedAndFetch, accessToken]);
+
+  // Public reset: clear seen history and re-fetch a fresh feed.
+  // Called when navigating back to Discover or when the feed is exhausted.
+  const resetQueue = useCallback(() => {
+    if (!accessTokenRef.current) return;
+    setSeenIds([]);
+    seenIdsRef.current = [];
+    setCurrentTrack(null);
+    setIsExhausted(false);
+    setIsLoading(true);
+    _seedAndFetch();
+  }, [_seedAndFetch]);
 
   const advanceQueue = useCallback((trackId) => {
     const next = [...seenIdsRef.current, trackId];
@@ -121,5 +148,6 @@ export function useTrackQueue(accessToken, { onCreditChange } = {}) {
     isExhausted,
     skipTrack,
     likeTrack,
+    resetQueue,
   };
 }
