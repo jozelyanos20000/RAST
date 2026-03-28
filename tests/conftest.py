@@ -3,18 +3,140 @@ Shared fixtures for RAST API test suite.
 
 Isolation strategy:
   - Each test gets a fresh SQLite database in a pytest tmp_path.
-  - database.DB_PATH is monkeypatched before init_db() is called,
-    so every get_connection() in that test hits the test-only file.
+  - database.get_connection is monkeypatched to return a SQLite adapter
+    that translates PostgreSQL-dialect SQL to SQLite, so tests run
+    locally without needing a PostgreSQL connection.
   - Upload/artwork folders are also redirected to tmp_path so no
     files accumulate in the project's static/ directory.
 """
 
 import io
 import os
+import re
+import sqlite3
+
 import pytest
 
 
+# ─── SQLite adapter (translates PostgreSQL dialect for testing) ──────────────
+
+
+class _ReturningResult:
+    """Fake cursor for INSERT ... RETURNING id queries."""
+
+    def __init__(self, lastrowid):
+        self._id = lastrowid
+
+    def fetchone(self):
+        return {"id": self._id}
+
+
+class _ColumnResult:
+    """Fake cursor for intercepted information_schema queries."""
+
+    def __init__(self, rows):
+        self._rows = rows
+
+    def fetchall(self):
+        return self._rows
+
+    def fetchone(self):
+        return self._rows[0] if self._rows else None
+
+
+class _SqliteAdapter:
+    """Wraps a sqlite3 file connection, accepting PostgreSQL-dialect SQL.
+
+    Translates:
+      %s            → ?
+      SERIAL PK     → INTEGER PK AUTOINCREMENT
+      NOW()-INTERVAL→ datetime('now', '-5 days')
+      DEFAULT NOW() → DEFAULT CURRENT_TIMESTAMP
+      NOW()         → CURRENT_TIMESTAMP
+      information_schema.columns → PRAGMA table_info
+      RETURNING id  → strip + lastrowid
+    """
+
+    def __init__(self, path):
+        self._conn = sqlite3.connect(path)
+        self._conn.row_factory = sqlite3.Row
+
+    # ── public interface (mirrors _PgConnection) ─────────────────────────
+
+    def execute(self, sql, params=None):
+        sql = self._translate_sql(sql)
+
+        # Intercept information_schema queries → PRAGMA table_info
+        if "information_schema.columns" in sql.lower():
+            table_name = params[-1] if params else ""
+            rows = self._conn.execute(
+                f"PRAGMA table_info([{table_name}])"
+            ).fetchall()
+            return _ColumnResult([{"column_name": r["name"]} for r in rows])
+
+        # Handle RETURNING id → strip clause, use lastrowid
+        m = re.search(r"\bRETURNING\s+id\b", sql, re.IGNORECASE)
+        if m:
+            sql = sql[: m.start()].rstrip()
+            cur = self._conn.execute(sql, params or ())
+            return _ReturningResult(cur.lastrowid)
+
+        return self._conn.execute(sql, params or ())
+
+    def commit(self):
+        self._conn.commit()
+
+    def rollback(self):
+        self._conn.rollback()
+
+    def close(self):
+        self._conn.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type is None:
+            self._conn.commit()
+        else:
+            self._conn.rollback()
+        self._conn.close()
+        return False
+
+    # ── SQL translation ──────────────────────────────────────────────────
+
+    @staticmethod
+    def _translate_sql(sql):
+        # Parameter placeholders
+        sql = sql.replace("%s", "?")
+        # DDL type
+        sql = re.sub(
+            r"SERIAL\s+PRIMARY\s+KEY",
+            "INTEGER PRIMARY KEY AUTOINCREMENT",
+            sql,
+            flags=re.IGNORECASE,
+        )
+        # Interval expression (must precede bare NOW() replacement)
+        sql = re.sub(
+            r"NOW\(\)\s*-\s*INTERVAL\s+'5 days'",
+            "datetime('now', '-5 days')",
+            sql,
+            flags=re.IGNORECASE,
+        )
+        # Default clause
+        sql = re.sub(
+            r"DEFAULT\s+NOW\(\)",
+            "DEFAULT CURRENT_TIMESTAMP",
+            sql,
+            flags=re.IGNORECASE,
+        )
+        # Remaining NOW() calls
+        sql = re.sub(r"\bNOW\(\)", "CURRENT_TIMESTAMP", sql, flags=re.IGNORECASE)
+        return sql
+
+
 # ─── low-level helpers (used only by fixtures here) ──────────────────────────
+
 
 def _make_audio(filename="track.mp3", size=256):
     """Return (BytesIO, filename) for multipart upload."""
@@ -39,17 +161,17 @@ def _upload_track(client, token, title="Test Track", filename="track.mp3"):
 
 # ─── fixtures ─────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def app(monkeypatch, tmp_path):
     """
     Yield a fully isolated Flask app instance per test.
 
-    - Fresh SQLite DB in tmp_path.
+    - Fresh SQLite DB in tmp_path (via adapter).
     - Upload/artwork dirs in tmp_path.
     - TESTING=True, CSRF disabled for cookies.
     """
     import database as db_module
-    import app as app_module
 
     db_path = str(tmp_path / "rast_test.db")
     upload_dir = str(tmp_path / "uploads")
@@ -57,7 +179,12 @@ def app(monkeypatch, tmp_path):
     os.makedirs(upload_dir)
     os.makedirs(artwork_dir)
 
-    monkeypatch.setattr(db_module, "DB_PATH", db_path)
+    # Patch BEFORE importing app — app.py calls init_db() at module level
+    monkeypatch.setattr(db_module, "get_connection", lambda: _SqliteAdapter(db_path))
+    monkeypatch.setattr(db_module, "IntegrityError", sqlite3.IntegrityError)
+
+    import app as app_module
+
     monkeypatch.setattr(app_module, "UPLOAD_FOLDER", upload_dir)
     monkeypatch.setattr(app_module, "ARTWORK_FOLDER", artwork_dir)
 

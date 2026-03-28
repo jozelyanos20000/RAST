@@ -51,14 +51,31 @@ No test touches the real `rast.db` or `static/` directory.
 ### Important: CORS / Proxy
 Vite proxy is configured in `frontend/vite.config.js` pointing
 `/api` and `/static` to `http://localhost:5000`. Do not remove this.
+The proxy also rewrites Set-Cookie domain from `localhost:5000` to `localhost`
+so refresh token cookies work correctly through the dev proxy.
+
+### Environment Variables
+See `.env.example` for all supported vars. Key ones:
+- `FLASK_SECRET_KEY` / `JWT_SECRET_KEY` — must be set and different in production
+- `FLASK_ENV` — set to `production` to serve React build from `frontend/dist`
+- `DATABASE_URL` — defaults to `rast.db`
+- `CORS_ORIGINS` — comma-separated allowed origins
+- `RAST_SEED_PASSWORD` — password for seed account (default: `RastSeed#2024!`)
+- `VITE_API_URL` — (dev only) override API base URL in frontend
+
+### Production Mode
+When `FLASK_ENV=production`, Flask serves the React build from `frontend/dist`.
+All non-`/api` and non-`/static` routes fall through to `index.html`.
+Build frontend first: `cd frontend && npm run build`.
 
 ## Tech Stack
-- Backend: Python / Flask (REST API only, does not serve HTML)
+- Backend: Python / Flask (REST API; serves React build in production mode)
 - Database: SQLite via sqlite3 (raw SQL, no ORM)
 - Frontend: React + Vite (port 5173)
 - Styling: Tailwind CSS v4 (installed via @tailwindcss/vite)
 - Audio: HTML5 Audio API
 - Auth: JWT via flask-jwt-extended (access + refresh tokens)
+- Image cropping: react-easy-crop (artwork upload)
 - Accepted audio formats: MP3, WAV only
 
 ## Project Structure
@@ -329,6 +346,6 @@ All DB access goes through `database.py`. Never write SQL in `app.py`.
 - Design system colors only — never invent new ones
 - All DB access through database.py only
 - JWT tokens: access in memory, refresh in httpOnly cookies
-- likes UNIQUE(user_id, track_id) — no duplicate likes
+- likes UNIQUE(user_id, track_id) — no duplicate likes; re-liking is idempotent (no double credit charge)
 - credits never below 0
 - skips cooldown is 5 days — exclude via `skipped_at > datetime('now', '-5 days')`
