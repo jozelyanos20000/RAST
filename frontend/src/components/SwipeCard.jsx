@@ -145,13 +145,13 @@ export default function SwipeCard({ track, exitDir = null, onExited, onSkip, onL
         {!artworkUrl && <WaveformSvg accentColor={accentColor} isPlaying={isPlaying} />}
       </div>
 
-      {/* ── Progress bar (top, 16px from edges) ── */}
+      {/* ── Progress bar (between filter button and credit badge) ── */}
       <div
         style={{
           position: 'absolute',
-          top: '16px',
-          left: '16px',
-          right: '16px',
+          top: '18px',
+          left: '48px',
+          right: '76px',
           zIndex: 20,
         }}
       >
