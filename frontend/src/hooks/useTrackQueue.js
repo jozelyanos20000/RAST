@@ -4,11 +4,12 @@ import { API_BASE } from '../config';
 /**
  * useTrackQueue — Manages the track discovery queue.
  *
- * Fetches tracks from /api/random-track?seen=<comma-separated IDs>,
+ * Fetches tracks from /api/random-track with seen IDs and optional filters,
  * maintains the seenIds list, and exposes skip/like actions.
  *
  * Props:
  *   accessToken {string|null} — JWT access token for Bearer auth
+ *   filters     {object|null} — { genres: string[], keywords: string[], bpmMin: number, bpmMax: number }
  *
  * Returns:
  *   currentTrack  {object|null}  — track object currently shown
@@ -16,8 +17,9 @@ import { API_BASE } from '../config';
  *   isExhausted   {boolean}      — true when API returns { exhausted: true }
  *   skipTrack     {function}     — mark current as seen, fetch next
  *   likeTrack     {function}     — mark current as seen (liked), fetch next
+ *   resetQueue    {function}     — clear history and re-fetch
  */
-export function useTrackQueue(accessToken, { onCreditChange } = {}) {
+export function useTrackQueue(accessToken, { onCreditChange, filters } = {}) {
   const [currentTrack, setCurrentTrack] = useState(null);
   const [seenIds, setSeenIds] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -31,11 +33,26 @@ export function useTrackQueue(accessToken, { onCreditChange } = {}) {
   const accessTokenRef = useRef(accessToken);
   useEffect(() => { accessTokenRef.current = accessToken; }, [accessToken]);
 
+  // Ref to track latest filters for use in fetchNext
+  const filtersRef = useRef(filters);
+
   const fetchNext = useCallback(async (ids) => {
     if (!accessTokenRef.current) return;
     setIsLoading(true);
     try {
-      const query = ids.length > 0 ? `?seen=${ids.join(',')}` : '';
+      const params = new URLSearchParams();
+      if (ids.length > 0) params.set('seen', ids.join(','));
+
+      const f = filtersRef.current;
+      if (f?.genres?.length) params.set('genres', f.genres.join(','));
+      if (f?.keywords?.length) params.set('keywords', f.keywords.join(','));
+      if (f?.bpmMin != null && f?.bpmMax != null
+          && !(f.bpmMin <= 1 && f.bpmMax >= 300)) {
+        params.set('bpm_min', String(f.bpmMin));
+        params.set('bpm_max', String(f.bpmMax));
+      }
+
+      const query = params.toString() ? `?${params.toString()}` : '';
       const res = await fetch(`${API_BASE}/api/random-track${query}`, {
         headers: { Authorization: `Bearer ${accessTokenRef.current}` },
       });
@@ -93,6 +110,24 @@ export function useTrackQueue(accessToken, { onCreditChange } = {}) {
       _seedAndFetch();
     }
   }, [_seedAndFetch, accessToken]);
+
+  // Detect filter changes and reset the queue
+  const filtersKeyRef = useRef(JSON.stringify(filters || {}));
+  useEffect(() => {
+    filtersRef.current = filters;
+    const key = JSON.stringify(filters || {});
+    if (key !== filtersKeyRef.current) {
+      filtersKeyRef.current = key;
+      if (accessTokenRef.current && initialFetchDone.current) {
+        setSeenIds([]);
+        seenIdsRef.current = [];
+        setCurrentTrack(null);
+        setIsExhausted(false);
+        setIsLoading(true);
+        _seedAndFetch();
+      }
+    }
+  }, [filters, _seedAndFetch]);
 
   // Public reset: clear seen history and re-fetch a fresh feed.
   // Called when navigating back to Discover or when the feed is exhausted.

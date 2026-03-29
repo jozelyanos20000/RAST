@@ -132,6 +132,8 @@ class _SqliteAdapter:
         )
         # Remaining NOW() calls
         sql = re.sub(r"\bNOW\(\)", "CURRENT_TIMESTAMP", sql, flags=re.IGNORECASE)
+        # Case-insensitive LIKE (PostgreSQL ILIKE → SQLite LIKE)
+        sql = re.sub(r"\bILIKE\b", "LIKE", sql, flags=re.IGNORECASE)
         return sql
 
 

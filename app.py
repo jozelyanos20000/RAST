@@ -327,7 +327,24 @@ def random_track():
     current_user_id = get_jwt_identity()
     seen_param = request.args.get("seen", "")
     seen_ids = [int(i) for i in seen_param.split(",") if i.strip().isdigit()]
-    track = get_random_track(seen_ids or None, exclude_user_id=current_user_id)
+
+    genres_param = request.args.get("genres", "")
+    genres = [g.strip() for g in genres_param.split(",") if g.strip()] or None
+    keywords_param = request.args.get("keywords", "")
+    keywords = [k.strip() for k in keywords_param.split(",") if k.strip()] or None
+    bpm_min_raw = request.args.get("bpm_min", "")
+    bpm_min = int(bpm_min_raw) if bpm_min_raw.isdigit() else None
+    bpm_max_raw = request.args.get("bpm_max", "")
+    bpm_max = int(bpm_max_raw) if bpm_max_raw.isdigit() else None
+
+    track = get_random_track(
+        seen_ids or None,
+        exclude_user_id=current_user_id,
+        genres=genres,
+        keywords=keywords,
+        bpm_min=bpm_min,
+        bpm_max=bpm_max,
+    )
     if track is None:
         return jsonify(exhausted=True)
     return jsonify({

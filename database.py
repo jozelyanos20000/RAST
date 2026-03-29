@@ -370,7 +370,8 @@ def record_skip(user_id, track_id):
         conn.commit()
 
 
-def get_random_track(exclude_ids=None, exclude_user_id=None):
+def get_random_track(exclude_ids=None, exclude_user_id=None,
+                     genres=None, keywords=None, bpm_min=None, bpm_max=None):
     with get_connection() as conn:
         _uid = int(exclude_user_id)
         conditions = ["u.user_id != %s"]
@@ -392,6 +393,29 @@ def get_random_track(exclude_ids=None, exclude_user_id=None):
             "u.id NOT IN (SELECT track_id FROM skips WHERE user_id = %s AND skipped_at > NOW() - INTERVAL '5 days')"
         )
         params.append(_uid)
+
+        # Genre / keyword filter (OR between categories)
+        content_conditions = []
+        if genres:
+            placeholders = ",".join(["%s"] * len(genres))
+            content_conditions.append(f"u.genre IN ({placeholders})")
+            params.extend(genres)
+        if keywords:
+            kw_parts = []
+            for kw in keywords:
+                kw_parts.append("u.tags ILIKE %s")
+                params.append(f"%{kw}%")
+            content_conditions.append(f"({' OR '.join(kw_parts)})")
+        if content_conditions:
+            conditions.append(f"({' OR '.join(content_conditions)})")
+
+        # BPM range filter (AND with everything else)
+        if bpm_min is not None:
+            conditions.append("u.bpm IS NOT NULL AND u.bpm >= %s")
+            params.append(bpm_min)
+        if bpm_max is not None:
+            conditions.append("u.bpm <= %s")
+            params.append(bpm_max)
 
         where = " AND ".join(conditions)
         row = conn.execute(

@@ -190,51 +190,17 @@ export default function SwipeCard({ track, exitDir = null, onExited, onSkip, onL
       }}>
 
         {/* Name row */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'flex-end',
-          justifyContent: 'space-between',
-          marginBottom: '10px',
-        }}>
+        <div style={{ marginBottom: '10px' }}>
           <div style={{
             fontSize: '38px',
             fontWeight: 900,
             color: '#fff',
             lineHeight: 1.05,
             letterSpacing: '-0.5px',
-            flex: 1,
-            paddingRight: '12px',
             textShadow: '0 2px 16px rgba(0,0,0,0.8)',
           }}>
             {trackName}
           </div>
-
-          {/* Upward arrow — stems purchase placeholder */}
-          <button
-            style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '50%',
-              background: 'rgba(255,255,255,0.18)',
-              backdropFilter: 'blur(10px)',
-              WebkitBackdropFilter: 'blur(10px)',
-              border: '1px solid rgba(255,255,255,0.25)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              cursor: 'pointer',
-              marginBottom: '2px',
-              padding: 0,
-            }}
-            aria-label="Purchase stems"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-                 stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="19" x2="12" y2="5"/>
-              <polyline points="5,12 12,5 19,12"/>
-            </svg>
-          </button>
         </div>
 
         {/* Description */}

@@ -6,6 +6,7 @@ import LoginScreen from './components/LoginScreen.jsx';
 import RegisterScreen from './components/RegisterScreen.jsx';
 import ProfileScreen from './components/ProfileScreen.jsx';
 import LibraryScreen from './components/LibraryScreen.jsx';
+import FilterPanel from './components/FilterPanel.jsx';
 import { useTrackQueue } from './hooks/useTrackQueue.js';
 import { useAuth } from './hooks/useAuth.js';
 
@@ -159,6 +160,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('discover');
   const [toast, setToast] = useState(null);
   const toastTimerRef = useRef(null);
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [filters, setFilters] = useState({ genres: [], keywords: [], bpmMin: 1, bpmMax: 300 });
 
   const showToast = useCallback((message) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -173,10 +176,19 @@ export default function App() {
   const handleLogout = useCallback(() => {
     logout();
     setActiveTab('discover');
+    setFilters({ genres: [], keywords: [], bpmMin: 1, bpmMax: 300 });
   }, [logout]);
 
   const { currentTrack, isLoading, isExhausted, skipTrack, likeTrack, resetQueue } =
-    useTrackQueue(accessToken, { onCreditChange: refreshCredits });
+    useTrackQueue(accessToken, { onCreditChange: refreshCredits, filters });
+
+  const hasActiveFilters = filters.genres.length > 0 || filters.keywords.length > 0
+    || filters.bpmMin > 1 || filters.bpmMax < 300;
+
+  const handleApplyFilters = useCallback((newFilters) => {
+    setFilters(newFilters);
+    setShowFilterPanel(false);
+  }, []);
 
   // Reset discover feed when navigating back to the Discover tab
   const prevTabRef = useRef(activeTab);
@@ -344,6 +356,41 @@ export default function App() {
       overflow: 'hidden',
     }}>
 
+      {/* Filter button (top left) */}
+      <button
+        onClick={() => setShowFilterPanel(true)}
+        aria-label="Filters"
+        style={{
+          position: 'absolute',
+          top: '20px',
+          left: '20px',
+          zIndex: 30,
+          background: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          padding: '6px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+             stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+        </svg>
+        {hasActiveFilters && (
+          <div style={{
+            position: 'absolute',
+            top: '2px',
+            right: '2px',
+            width: '8px',
+            height: '8px',
+            borderRadius: '50%',
+            background: '#7C3AED',
+          }} />
+        )}
+      </button>
+
       {/* Credit badge (top right) */}
       <div style={{
         position: 'absolute',
@@ -420,6 +467,13 @@ export default function App() {
       </div>
 
       <NavBar activeTab={activeTab} onTabChange={setActiveTab} />
+
+      <FilterPanel
+        isOpen={showFilterPanel}
+        currentFilters={filters}
+        onApply={handleApplyFilters}
+        onClose={() => setShowFilterPanel(false)}
+      />
     </div>
   );
 }

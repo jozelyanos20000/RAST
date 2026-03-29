@@ -25,8 +25,8 @@ const KEY_OPTIONS = [
   'A', 'Am', 'A#', 'A#m', 'B', 'Bm',
 ];
 const GENRE_OPTIONS = [
-  'None', 'Hip Hop', 'Trap', 'R&B', 'Pop', 'Electronic',
-  'Drill', 'Afrobeats', 'Lo-fi', 'Jazz', 'Soul', 'Other',
+  'None', 'Hip Hop', 'Trap', 'Rage', 'R&B', 'Pop', 'Electronic',
+  'Drill', 'Afro', 'Lo-fi', 'Other',
 ];
 
 export default function UploadScreen({ onBack, accessToken, refreshCredits }) {

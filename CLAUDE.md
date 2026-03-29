@@ -148,6 +148,21 @@ Tests run against SQLite, not PostgreSQL. `conftest.py` provides a
 ensure it uses only PostgreSQL syntax that the adapter can translate,
 or extend the adapter's `_translate_sql()` method.
 
+**Adapter limitations:**
+- Only `RETURNING id` is supported — the clause is stripped and `lastrowid` is used.
+  `RETURNING *` or `RETURNING <other_column>` will silently return nothing.
+- The interval translation is hardcoded for `'5 days'` only. Other interval values
+  require extending `_translate_sql()`.
+
+`storage._use_r2` is evaluated once at module import time from env vars. Tests
+monkeypatch `storage.LOCAL_UPLOAD_DIR` / `storage.LOCAL_ARTWORK_DIR` directly
+rather than toggling R2 mode.
+
+## Utility Scripts
+- `cleanup_db.py` — **production-only** script that deletes all uploads, likes,
+  skips, and non-signup credit transactions from the live database. Contains a
+  hardcoded DATABASE_URL. Do not run this accidentally.
+
 ## Known Issues / Tech Debt
 - `GET /` and `POST /upload` in `app.py` still use `render_template`,
   `flash`, and `redirect` — legacy Jinja behavior to be refactored.
