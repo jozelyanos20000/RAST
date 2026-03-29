@@ -112,7 +112,7 @@ function TrackRow({ track, isActive, isPlaying, progress, onToggle, actionSlot }
         color: 'rgba(255,255,255,0.85)',
       }}>
         {track.artwork
-          ? <img src={`/static/artwork/${track.artwork}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ? <img src={track.artwork} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           : (track.title || track.original_name || '?')[0].toUpperCase()
         }
       </div>
@@ -290,7 +290,7 @@ export default function LibraryScreen({ accessToken }) {
       audioRef.current.src = '';
     }
 
-    const audio = new Audio(`/static/uploads/${track.filename}`);
+    const audio = new Audio(track.filename);
     audio.addEventListener('timeupdate', () => {
       if (audio.duration) setProgress(audio.currentTime / audio.duration);
     });
@@ -310,7 +310,7 @@ export default function LibraryScreen({ accessToken }) {
   // ── Download ────────────────────────────────────────────────────────────
   const handleDownload = useCallback((track) => {
     const a = document.createElement('a');
-    a.href = `/static/uploads/${track.filename}`;
+    a.href = track.filename;
     a.download = track.original_name || track.filename;
     document.body.appendChild(a);
     a.click();

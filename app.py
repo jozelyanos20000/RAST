@@ -22,6 +22,7 @@ from database import (
     add_like, remove_like, get_likes_by_user, get_user_uploads_with_likes,
     get_user_credits, record_skip, get_upload_by_id,
 )
+from storage import upload_file
 
 UPLOAD_FOLDER = os.path.join("static", "uploads")
 ARTWORK_FOLDER = os.path.join("static", "artwork")
@@ -175,17 +176,24 @@ def api_upload():
     original_name = audio_file.filename
     safe_name = secure_filename(original_name)
     stored_filename = f"{uuid.uuid4().hex}_{safe_name}"
-    os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
-    audio_file.save(os.path.join(app.config["UPLOAD_FOLDER"], stored_filename))
+    audio_url = upload_file(
+        audio_file.read(),
+        stored_filename,
+        audio_file.content_type or "application/octet-stream",
+        folder="uploads",
+    )
 
-    artwork_filename = None
+    artwork_url = None
     artwork_file = request.files.get("artwork")
     if artwork_file and artwork_file.filename and allowed_image(artwork_file.filename):
         art_safe = secure_filename(artwork_file.filename)
         art_stored = f"{uuid.uuid4().hex}_{art_safe}"
-        os.makedirs(ARTWORK_FOLDER, exist_ok=True)
-        artwork_file.save(os.path.join(ARTWORK_FOLDER, art_stored))
-        artwork_filename = art_stored
+        artwork_url = upload_file(
+            artwork_file.read(),
+            art_stored,
+            artwork_file.content_type or "image/jpeg",
+            folder="artwork",
+        )
 
     title = request.form.get("title", "").strip() or None
     description = request.form.get("description", "").strip() or None
@@ -198,7 +206,7 @@ def api_upload():
     tags = ",".join(tags_list) or None
 
     track_id = add_upload(
-        filename=stored_filename,
+        filename=audio_url,
         original_name=original_name,
         title=title,
         description=description,
@@ -206,7 +214,7 @@ def api_upload():
         key=key,
         genre=genre,
         tags=tags,
-        artwork=artwork_filename,
+        artwork=artwork_url,
         user_id=user_id,
     )
     return jsonify(success=True, id=track_id)

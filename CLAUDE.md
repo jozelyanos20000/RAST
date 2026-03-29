@@ -44,9 +44,10 @@ py -m pytest -k "test_login"              # by name pattern
 ```
 79 tests across 13 classes. All must pass before deployment.
 
-Tests are fully isolated: each test gets a fresh SQLite DB and
-upload/artwork dirs in `tmp_path` via monkeypatch (see `tests/conftest.py`).
-No test touches the real `rast.db` or `static/` directory.
+Tests are fully isolated: each test gets a fresh SQLite DB (via a
+PostgreSQL-to-SQLite translation adapter in `conftest.py`) and
+upload/artwork dirs in `tmp_path` via monkeypatch.
+No test touches the real database or `static/` directory.
 
 ### Important: CORS / Proxy
 Vite proxy is configured in `frontend/vite.config.js` pointing
@@ -58,10 +59,11 @@ so refresh token cookies work correctly through the dev proxy.
 See `.env.example` for all supported vars. Key ones:
 - `FLASK_SECRET_KEY` / `JWT_SECRET_KEY` — must be set and different in production
 - `FLASK_ENV` — set to `production` to serve React build from `frontend/dist`
-- `DATABASE_URL` — defaults to `rast.db`
+- `DATABASE_URL` — PostgreSQL connection string (defaults to `postgresql://localhost/rast`)
 - `CORS_ORIGINS` — comma-separated allowed origins
 - `RAST_SEED_PASSWORD` — password for seed account (default: `RastSeed#2024!`)
 - `VITE_API_URL` — (dev only) override API base URL in frontend
+- `R2_*` vars — Cloudflare R2 storage (see `storage.py`); falls back to local disk when unset
 
 ### Production Mode
 When `FLASK_ENV=production`, Flask serves the React build from `frontend/dist`.
@@ -70,7 +72,7 @@ Build frontend first: `cd frontend && npm run build`.
 
 ## Tech Stack
 - Backend: Python / Flask (REST API; serves React build in production mode)
-- Database: SQLite via sqlite3 (raw SQL, no ORM)
+- Database: PostgreSQL via psycopg2 (raw SQL, no ORM)
 - Frontend: React + Vite (port 5173)
 - Styling: Tailwind CSS v4 (installed via @tailwindcss/vite)
 - Audio: HTML5 Audio API
@@ -83,9 +85,9 @@ Build frontend first: `cd frontend && npm run build`.
 RAST/
 ├── app.py
 ├── database.py
+├── storage.py
 ├── requirements.txt
 ├── pytest.ini
-├── rast.db
 ├── references/
 ├── static/
 │   ├── uploads/
@@ -137,6 +139,15 @@ Values: `'discover'`, `'upload'`, `'library'`, `'profile'`.
 `useTrackQueue` maintains a `seenIds` array passed as `?seen=` to prevent
 repeat tracks. Swipe left calls `POST /api/skips`. Swipe right calls `POST /api/likes`.
 
+## Testing Architecture
+Tests run against SQLite, not PostgreSQL. `conftest.py` provides a
+`_SqliteAdapter` that translates PostgreSQL-dialect SQL (e.g. `%s` → `?`,
+`SERIAL PRIMARY KEY` → `INTEGER PRIMARY KEY AUTOINCREMENT`,
+`NOW() - INTERVAL '5 days'` → `datetime('now', '-5 days')`,
+`RETURNING id` → `lastrowid`). When adding new SQL to `database.py`,
+ensure it uses only PostgreSQL syntax that the adapter can translate,
+or extend the adapter's `_translate_sql()` method.
+
 ## Known Issues / Tech Debt
 - `GET /` and `POST /upload` in `app.py` still use `render_template`,
   `flash`, and `redirect` — legacy Jinja behavior to be refactored.
@@ -179,11 +190,11 @@ repeat tracks. Swipe left calls `POST /api/skips`. Swipe right calls `POST /api/
 ### users
 ```sql
 CREATE TABLE users (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    id            SERIAL PRIMARY KEY,
     username      TEXT NOT NULL UNIQUE,
     email         TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
-    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at    TIMESTAMP DEFAULT NOW()
 )
 ```
 Note: `credits INTEGER NOT NULL DEFAULT 0` added via `_migrate()`.
@@ -191,7 +202,7 @@ Note: `credits INTEGER NOT NULL DEFAULT 0` added via `_migrate()`.
 ### uploads
 ```sql
 CREATE TABLE uploads (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    id            SERIAL PRIMARY KEY,
     user_id       INTEGER REFERENCES users(id),
     filename      TEXT NOT NULL,
     original_name TEXT NOT NULL,
@@ -202,17 +213,17 @@ CREATE TABLE uploads (
     genre         TEXT,
     tags          TEXT,
     artwork       TEXT,
-    uploaded_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    uploaded_at   TIMESTAMP DEFAULT NOW()
 )
 ```
 
 ### likes
 ```sql
 CREATE TABLE likes (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id    INTEGER REFERENCES users(id),
-    track_id   INTEGER REFERENCES uploads(id),
-    liked_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    id       SERIAL PRIMARY KEY,
+    user_id  INTEGER REFERENCES users(id),
+    track_id INTEGER REFERENCES uploads(id),
+    liked_at TIMESTAMP DEFAULT NOW(),
     UNIQUE(user_id, track_id)
 )
 ```
@@ -222,7 +233,7 @@ CREATE TABLE likes (
 CREATE TABLE skips (
     user_id    INTEGER REFERENCES users(id),
     track_id   INTEGER REFERENCES uploads(id),
-    skipped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    skipped_at TIMESTAMP DEFAULT NOW(),
     PRIMARY KEY (user_id, track_id)
 )
 ```
@@ -232,11 +243,11 @@ Re-skipping a track resets `skipped_at` to extend the cooldown.
 ### credit_transactions
 ```sql
 CREATE TABLE credit_transactions (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    id         SERIAL PRIMARY KEY,
     user_id    INTEGER REFERENCES users(id),
     amount     INTEGER NOT NULL,
     reason     TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT NOW()
 )
 ```
 `amount` is positive for credits earned, negative for credits spent.
@@ -348,4 +359,4 @@ All DB access goes through `database.py`. Never write SQL in `app.py`.
 - JWT tokens: access in memory, refresh in httpOnly cookies
 - likes UNIQUE(user_id, track_id) — no duplicate likes; re-liking is idempotent (no double credit charge)
 - credits never below 0
-- skips cooldown is 5 days — exclude via `skipped_at > datetime('now', '-5 days')`
+- skips cooldown is 5 days — exclude via `skipped_at > NOW() - INTERVAL '5 days'`

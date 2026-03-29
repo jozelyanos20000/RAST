@@ -42,7 +42,7 @@ export default function SwipeCard({ track, exitDir = null, onExited, onSkip, onL
   const accentColor = ACCENT_COLORS[track.id % 6];
   const tags = parseTags(track.tags);
   const trackName = track.title || stripExtension(track.original_name);
-  const artworkUrl = track.artwork ? `/static/artwork/${track.artwork}` : null;
+  const artworkUrl = track.artwork || null;
 
   /* ── Audio setup ── */
   useEffect(() => {
@@ -115,7 +115,7 @@ export default function SwipeCard({ track, exitDir = null, onExited, onSkip, onL
       {/* ── Hidden audio element ── */}
       <audio
         ref={audioRef}
-        src={`/static/uploads/${track.filename}`}
+        src={track.filename}
         preload="auto"
       />
 

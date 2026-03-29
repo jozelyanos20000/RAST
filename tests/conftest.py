@@ -184,9 +184,12 @@ def app(monkeypatch, tmp_path):
     monkeypatch.setattr(db_module, "IntegrityError", sqlite3.IntegrityError)
 
     import app as app_module
+    import storage as storage_module
 
     monkeypatch.setattr(app_module, "UPLOAD_FOLDER", upload_dir)
     monkeypatch.setattr(app_module, "ARTWORK_FOLDER", artwork_dir)
+    monkeypatch.setattr(storage_module, "LOCAL_UPLOAD_DIR", upload_dir)
+    monkeypatch.setattr(storage_module, "LOCAL_ARTWORK_DIR", artwork_dir)
 
     app_module.app.config.update(
         {
