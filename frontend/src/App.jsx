@@ -9,6 +9,7 @@ import LibraryScreen from './components/LibraryScreen.jsx';
 import FilterPanel from './components/FilterPanel.jsx';
 import { useTrackQueue } from './hooks/useTrackQueue.js';
 import { useAuth } from './hooks/useAuth.js';
+import { API_BASE } from './config.js';
 
 /**
  * SplashScreen — shown while the auth session check is in-flight.
@@ -162,6 +163,8 @@ export default function App() {
   const toastTimerRef = useRef(null);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [filters, setFilters] = useState({ genres: [], keywords: [], bpmMin: 1, bpmMax: 300 });
+  const [showWelcome, setShowWelcome] = useState(false);
+  const welcomeUserRef = useRef(null);
 
   const showToast = useCallback((message) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -173,11 +176,44 @@ export default function App() {
     return () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); };
   }, []);
 
+  const dismissWelcome = useCallback(() => {
+    setShowWelcome(false);
+    if (welcomeUserRef.current) {
+      localStorage.setItem(`rast_welcome_seen_${welcomeUserRef.current}`, '1');
+    }
+  }, []);
+
   const handleLogout = useCallback(() => {
     logout();
     setActiveTab('discover');
     setFilters({ genres: [], keywords: [], bpmMin: 1, bpmMax: 300 });
+    setShowWelcome(false);
+    welcomeUserRef.current = null;
   }, [logout]);
+
+  // ── Welcome banner: check if first-time user ──
+  useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [meRes, uploadsRes] = await Promise.all([
+          fetch(`${API_BASE}/api/me`, { headers: { Authorization: `Bearer ${accessToken}` } }),
+          fetch(`${API_BASE}/api/my-uploads`, { headers: { Authorization: `Bearer ${accessToken}` } }),
+        ]);
+        if (cancelled || !meRes.ok || !uploadsRes.ok) return;
+        const me = await meRes.json();
+        const uploads = await uploadsRes.json();
+        if (cancelled) return;
+        welcomeUserRef.current = me.username;
+        const seen = localStorage.getItem(`rast_welcome_seen_${me.username}`);
+        if (!seen && uploads.length === 0 && me.credits === 5) {
+          setShowWelcome(true);
+        }
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [accessToken]);
 
   const { currentTrack, isLoading, isExhausted, skipTrack, likeTrack, resetQueue } =
     useTrackQueue(accessToken, { onCreditChange: refreshCredits, filters });
@@ -196,8 +232,12 @@ export default function App() {
     if (activeTab === 'discover' && prevTabRef.current !== 'discover') {
       resetQueue();
     }
+    // Auto-dismiss welcome banner when navigating to Upload
+    if (activeTab === 'upload' && showWelcome) {
+      dismissWelcome();
+    }
     prevTabRef.current = activeTab;
-  }, [activeTab, resetQueue]);
+  }, [activeTab, resetQueue, showWelcome, dismissWelcome]);
 
   // 'left' | 'right' | null — drives the card exit animation
   const [exitDir, setExitDir] = useState(null);
@@ -439,10 +479,92 @@ export default function App() {
         }}>{toast}</div>
       )}
 
+      {/* Welcome banner */}
+      {showWelcome && (
+        <>
+          <style>{`
+            @keyframes welcome-fadein {
+              from { opacity: 0; transform: translateY(-8px); }
+              to   { opacity: 1; transform: translateY(0); }
+            }
+          `}</style>
+          <div style={{
+            margin: '52px 12px 0',
+            padding: '12px 14px',
+            background: 'rgba(124,58,237,0.08)',
+            border: '1px solid rgba(124,58,237,0.3)',
+            borderRadius: '12px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '10px',
+            zIndex: 25,
+            position: 'relative',
+            animation: 'welcome-fadein 0.35s ease-out',
+            boxShadow: '0 0 20px rgba(124,58,237,0.12)',
+            flexShrink: 0,
+          }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: '13px',
+                fontWeight: 700,
+                color: '#fff',
+                lineHeight: 1.4,
+              }}>
+                Welcome to RAST 🎛️
+              </div>
+              <div style={{
+                fontSize: '12px',
+                color: 'rgba(255,255,255,0.6)',
+                lineHeight: 1.4,
+                marginTop: '2px',
+              }}>
+                You have 5 loops on us. Upload your first loop and unlock 20 more.
+              </div>
+              <div style={{
+                marginTop: '6px',
+                fontSize: '11px',
+                fontWeight: 600,
+                color: '#A78BFA',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                     stroke="#A78BFA" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"/>
+                  <polyline points="5,12 12,19 19,12"/>
+                </svg>
+                Tap Upload below
+              </div>
+            </div>
+            <button
+              onClick={dismissWelcome}
+              aria-label="Dismiss welcome"
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '2px',
+                flexShrink: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                   stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+        </>
+      )}
+
       {/* Card container */}
       <div style={{
         flex: 1,
-        padding: '12px 12px 12px',
+        padding: showWelcome ? '6px 12px 12px' : '12px 12px 12px',
         display: 'flex',
         flexDirection: 'column',
         minHeight: 0,
@@ -466,7 +588,7 @@ export default function App() {
         )}
       </div>
 
-      <NavBar activeTab={activeTab} onTabChange={setActiveTab} />
+      <NavBar activeTab={activeTab} onTabChange={setActiveTab} pulseUpload={showWelcome} />
 
       <FilterPanel
         isOpen={showFilterPanel}

@@ -66,7 +66,7 @@ const TABS = [
   },
 ];
 
-export default function NavBar({ activeTab = 'discover', onTabChange }) {
+export default function NavBar({ activeTab = 'discover', onTabChange, pulseUpload = false }) {
   return (
     <div style={{
       height: '60px',
@@ -77,9 +77,18 @@ export default function NavBar({ activeTab = 'discover', onTabChange }) {
       flexShrink: 0,
       paddingBottom: 'env(safe-area-inset-bottom, 0px)',
     }}>
+      {pulseUpload && (
+        <style>{`
+          @keyframes nav-upload-pulse {
+            0%, 100% { box-shadow: 0 0 6px rgba(124,58,237,0.4); }
+            50%      { box-shadow: 0 0 18px rgba(124,58,237,0.8); }
+          }
+        `}</style>
+      )}
       {TABS.map((tab) => {
         const isActive = tab.id === activeTab;
-        const iconColor = isActive ? '#ffffff' : '#6B7280';
+        const isPulsing = pulseUpload && tab.id === 'upload';
+        const iconColor = isActive ? '#ffffff' : isPulsing ? '#A78BFA' : '#6B7280';
 
         return (
           <button
@@ -98,9 +107,20 @@ export default function NavBar({ activeTab = 'discover', onTabChange }) {
               cursor: 'pointer',
               gap: '3px',
               padding: 0,
+              position: 'relative',
             }}
           >
-            {tab.icon(iconColor)}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '50%',
+              ...(isPulsing && {
+                animation: 'nav-upload-pulse 2s ease-in-out infinite',
+              }),
+            }}>
+              {tab.icon(iconColor)}
+            </div>
             {isActive && (
               <div style={{
                 width: '4px',
