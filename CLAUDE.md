@@ -106,6 +106,7 @@ RAST/
         │   ├── WaveformSvg.jsx
         │   ├── ActionBar.jsx
         │   ├── NavBar.jsx
+        │   ├── FilterPanel.jsx
         │   ├── UploadScreen.jsx
         │   ├── LoginScreen.jsx
         │   ├── RegisterScreen.jsx
@@ -179,7 +180,7 @@ rather than toggling R2 mode.
 - `GET /api/me` — returns `{username, email, credits}` for the authenticated user
 - `GET /api/credits` — returns `{credits: <int>}` for the current user
 - `POST /api/upload` — accepts audio file + metadata, returns `{"success": true, "id": <int>}`
-- `GET /api/random-track?seen=1,2,3` — returns random track JSON excluding current user's uploads, liked tracks (permanent), skipped tracks (5 day cooldown)
+- `GET /api/random-track?seen=1,2,3&genres=Hip+Hop,Trap&keywords=dark&bpm_min=80&bpm_max=120` — returns random track JSON excluding current user's uploads, liked tracks (permanent), skipped tracks (5 day cooldown). Optional filter params: `genres` (comma-separated, OR logic), `keywords` (comma-separated, matches title/description/tags), `bpm_min`/`bpm_max`
 - `GET /api/likes` — returns all tracks liked by the current user with full metadata
 - `POST /api/likes` — `{track_id}` → `{"success": true}` — deducts 1 credit, records like
 - `DELETE /api/likes/<track_id>` — removes a like (future use)
@@ -362,7 +363,6 @@ All DB access goes through `database.py`. Never write SQL in `app.py`.
 - Drag gesture swiping
 - Stem purchasing
 - Chat functionality
-- Filters
 
 ## Rules
 - Never break existing functionality

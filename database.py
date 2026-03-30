@@ -205,7 +205,7 @@ def create_user(username, email, password_hash):
                 (username, email, password_hash),
             )
             user_id = cur.fetchone()["id"]
-            add_credit_transaction(conn, user_id, 10, "signup")
+            add_credit_transaction(conn, user_id, 5, "signup")
             conn.commit()
             return user_id
         except IntegrityError as exc:
@@ -252,7 +252,15 @@ def add_upload(filename, original_name, title=None, bpm=None, key=None,
         )
         track_id = cur.fetchone()["id"]
         if user_id is not None:
-            add_credit_transaction(conn, user_id, 1, "upload")
+            existing = conn.execute(
+                "SELECT COUNT(*) AS cnt FROM uploads WHERE user_id = %s AND id != %s",
+                (user_id, track_id),
+            ).fetchone()
+            is_first = existing["cnt"] == 0
+            if is_first:
+                add_credit_transaction(conn, user_id, 20, "first_upload")
+            else:
+                add_credit_transaction(conn, user_id, 1, "upload")
         conn.commit()
         return track_id
 

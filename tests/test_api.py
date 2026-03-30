@@ -85,10 +85,10 @@ class TestRegister:
         assert res.status_code == 201
         assert "access_token" in res.get_json()
 
-    def test_awards_10_credits_on_signup(self, client):
+    def test_awards_5_credits_on_signup(self, client):
         res = _register(client, "newuser", "new@example.com")
         token = res.get_json()["access_token"]
-        assert _credits(client, token) == 10
+        assert _credits(client, token) == 5
 
     def test_sets_refresh_token_cookie(self, client):
         res = _register(client, "newuser", "new@example.com")
@@ -245,7 +245,7 @@ class TestCreditsEndpoint:
     def test_returns_current_balance(self, client, test_user, auth_headers):
         res = client.get("/api/credits", headers=auth_headers)
         assert res.status_code == 200
-        assert res.get_json()["credits"] == 10
+        assert res.get_json()["credits"] == 5
 
     def test_no_auth_returns_401(self, client):
         assert client.get("/api/credits").status_code == 401
@@ -278,9 +278,15 @@ class TestUpload:
         )
         assert res.status_code == 200
 
-    def test_upload_earns_1_credit(self, client, test_user, auth_headers):
+    def test_first_upload_earns_20_credits(self, client, test_user, auth_headers):
         before = _credits(client, test_user["token"])
         _upload(client, test_user["token"])
+        assert _credits(client, test_user["token"]) == before + 20
+
+    def test_subsequent_upload_earns_1_credit(self, client, test_user, auth_headers):
+        _upload(client, test_user["token"], title="First")
+        before = _credits(client, test_user["token"])
+        _upload(client, test_user["token"], title="Second")
         assert _credits(client, test_user["token"]) == before + 1
 
     def test_invalid_file_type_returns_400(self, client, auth_headers):
@@ -584,18 +590,18 @@ class TestMyUploads:
 
 
 class TestCreditBalance:
-    def test_signup_starts_at_10(self, client):
+    def test_signup_starts_at_5(self, client):
         res = _register(client, "fresh", "fresh@example.com")
         token = res.get_json()["access_token"]
-        assert _credits(client, token) == 10
+        assert _credits(client, token) == 5
 
-    def test_upload_adds_1(self, client, test_user, auth_headers):
+    def test_first_upload_adds_20(self, client, test_user, auth_headers):
         _upload(client, test_user["token"])
-        assert _credits(client, test_user["token"]) == 11
+        assert _credits(client, test_user["token"]) == 25
 
     def test_like_subtracts_1(self, client, test_user, auth_headers, test_track):
         _like(client, auth_headers, test_track)
-        assert _credits(client, test_user["token"]) == 9
+        assert _credits(client, test_user["token"]) == 4
 
     def test_credits_at_1_like_succeeds_and_drops_to_0(
         self, client, auth_headers, test_user, test_track
@@ -618,12 +624,12 @@ class TestCreditBalance:
     ):
         _set_credits("testuser", 0)
         _upload(client, test_user["token"])
-        assert _credits(client, test_user["token"]) == 1
+        assert _credits(client, test_user["token"]) == 20
 
     def test_track_owner_earns_credit_when_liked(
         self, client, auth_headers, other_user, test_track
     ):
-        # other_user uploaded test_track and got 1 upload credit → 11 total
+        # other_user uploaded test_track (first upload) and got 20 upload credits → 25 total
         before = _credits(client, other_user["token"])
         _like(client, auth_headers, test_track)
         assert _credits(client, other_user["token"]) == before + 1
@@ -706,20 +712,20 @@ class TestEdgeCases:
         self, client, test_user, auth_headers, other_user, other_headers
     ):
         """End-to-end credit flow: signup → upload → like → be liked."""
-        # test_user: 10 credits (signup)
-        assert _credits(client, test_user["token"]) == 10
+        # test_user: 5 credits (signup)
+        assert _credits(client, test_user["token"]) == 5
 
-        # test_user uploads → +1
+        # test_user uploads (first upload) → +20
         _upload(client, test_user["token"], "Loop A")
-        assert _credits(client, test_user["token"]) == 11
+        assert _credits(client, test_user["token"]) == 25
 
-        # other_user uploads a track for test_user to like
+        # other_user uploads a track for test_user to like (first upload → +20)
         res = _upload(client, other_user["token"], "Loop B")
         loop_b_id = res.get_json()["id"]
 
         # test_user likes other_user's track → -1
         _like(client, auth_headers, loop_b_id)
-        assert _credits(client, test_user["token"]) == 10
+        assert _credits(client, test_user["token"]) == 24
 
-        # other_user earned +1 (signup 10 + upload 1 + like_received 1 = 12)
-        assert _credits(client, other_user["token"]) == 12
+        # other_user earned +1 (signup 5 + first_upload 20 + like_received 1 = 26)
+        assert _credits(client, other_user["token"]) == 26
