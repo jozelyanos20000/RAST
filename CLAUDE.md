@@ -117,7 +117,7 @@ All DB access goes through `database.py`. Never write SQL in `app.py`.
 `GET /api/random-track?seen=&genres=&keywords=&bpm_min=&bpm_max=`
 
 `/api/random-track` excludes: own uploads, liked tracks (permanent),
-skipped tracks (5-day cooldown). Filter params use OR logic for genres/keywords.
+skipped tracks (2-day cooldown). Filter params use OR logic for genres/keywords.
 
 **Legacy (to be deprecated):** `GET /` and `POST /upload` — still use Jinja.
 

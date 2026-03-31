@@ -495,7 +495,7 @@ class TestSkips:
         assert res.status_code == 200
         assert res.get_json()["success"] is True
 
-    def test_skip_excludes_track_within_5_days(
+    def test_skip_excludes_track_within_2_days(
         self, client, auth_headers, test_track
     ):
         _skip(client, auth_headers, test_track)
@@ -515,10 +515,10 @@ class TestSkips:
         # First skip
         _skip(client, auth_headers, test_track)
 
-        # Backdate skipped_at to 6 days ago so cooldown has expired
+        # Backdate skipped_at to 3 days ago so cooldown has expired
         with database.get_connection() as conn:
             conn.execute(
-                "UPDATE skips SET skipped_at = datetime('now', '-6 days')"
+                "UPDATE skips SET skipped_at = datetime('now', '-3 days')"
             )
             conn.commit()
 
@@ -674,7 +674,7 @@ class TestEdgeCases:
         assert res.status_code == 200
         assert res.get_json() == {"exhausted": True}
 
-    def test_skipped_track_reappears_after_5_day_cooldown(
+    def test_skipped_track_reappears_after_2_day_cooldown(
         self, client, auth_headers, test_track
     ):
         import database
@@ -684,7 +684,7 @@ class TestEdgeCases:
         # Expire the cooldown
         with database.get_connection() as conn:
             conn.execute(
-                "UPDATE skips SET skipped_at = datetime('now', '-6 days')"
+                "UPDATE skips SET skipped_at = datetime('now', '-3 days')"
             )
             conn.commit()
 
