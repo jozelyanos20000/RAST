@@ -396,9 +396,9 @@ def get_random_track(exclude_ids=None, exclude_user_id=None,
         )
         params.append(_uid)
 
-        # Exclude tracks skipped within the last 5 days
+        # Exclude tracks skipped within the last 2 days
         conditions.append(
-            "u.id NOT IN (SELECT track_id FROM skips WHERE user_id = %s AND skipped_at > NOW() - INTERVAL '5 days')"
+            "u.id NOT IN (SELECT track_id FROM skips WHERE user_id = %s AND skipped_at > NOW() - INTERVAL '2 days')"
         )
         params.append(_uid)
 

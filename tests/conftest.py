@@ -50,7 +50,7 @@ class _SqliteAdapter:
     Translates:
       %s            → ?
       SERIAL PK     → INTEGER PK AUTOINCREMENT
-      NOW()-INTERVAL→ datetime('now', '-5 days')
+      NOW()-INTERVAL→ datetime('now', '-2 days')
       DEFAULT NOW() → DEFAULT CURRENT_TIMESTAMP
       NOW()         → CURRENT_TIMESTAMP
       information_schema.columns → PRAGMA table_info
@@ -118,8 +118,8 @@ class _SqliteAdapter:
         )
         # Interval expression (must precede bare NOW() replacement)
         sql = re.sub(
-            r"NOW\(\)\s*-\s*INTERVAL\s+'5 days'",
-            "datetime('now', '-5 days')",
+            r"NOW\(\)\s*-\s*INTERVAL\s+'2 days'",
+            "datetime('now', '-2 days')",
             sql,
             flags=re.IGNORECASE,
         )
