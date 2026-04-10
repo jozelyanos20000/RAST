@@ -7,6 +7,9 @@ import { API_BASE } from '../config';
  * Fetches tracks from /api/random-track with seen IDs and optional filters,
  * maintains the seenIds list, and exposes skip/like actions.
  *
+ * Works for both authenticated users and guests. Guests fetch without
+ * auth headers and skip locally (no POST to /api/skips).
+ *
  * Props:
  *   accessToken {string|null} — JWT access token for Bearer auth
  *   filters     {object|null} — { genres: string[], keywords: string[], bpmMin: number, bpmMax: number }
@@ -37,7 +40,6 @@ export function useTrackQueue(accessToken, { onCreditChange, filters } = {}) {
   const filtersRef = useRef(filters);
 
   const fetchNext = useCallback(async (ids) => {
-    if (!accessTokenRef.current) return;
     setIsLoading(true);
     try {
       const params = new URLSearchParams();
@@ -53,9 +55,11 @@ export function useTrackQueue(accessToken, { onCreditChange, filters } = {}) {
       }
 
       const query = params.toString() ? `?${params.toString()}` : '';
-      const res = await fetch(`${API_BASE}/api/random-track${query}`, {
-        headers: { Authorization: `Bearer ${accessTokenRef.current}` },
-      });
+      const headers = {};
+      if (accessTokenRef.current) {
+        headers.Authorization = `Bearer ${accessTokenRef.current}`;
+      }
+      const res = await fetch(`${API_BASE}/api/random-track${query}`, { headers });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
 
@@ -74,23 +78,13 @@ export function useTrackQueue(accessToken, { onCreditChange, filters } = {}) {
     }
   }, []);
 
-  // Reset all state when the user logs out (accessToken → null).
-  // This ensures a subsequent login starts with a clean queue.
-  const initialFetchDone = useRef(false);
-  useEffect(() => {
-    if (!accessToken) {
-      setSeenIds([]);
-      seenIdsRef.current = [];
-      setCurrentTrack(null);
-      setIsExhausted(false);
-      setIsLoading(true);
-      initialFetchDone.current = false;
-    }
-  }, [accessToken]);
-
-  // Seed seenIds with liked track IDs, then fetch the first track.
-  // Runs once per session (guarded by initialFetchDone ref, reset on logout).
+  // Seed seenIds with liked track IDs (authenticated) or start fresh (guest),
+  // then fetch the first track.
   const _seedAndFetch = useCallback(() => {
+    if (!accessTokenRef.current) {
+      fetchNext([]);
+      return;
+    }
     fetch(`${API_BASE}/api/likes`, {
       headers: { Authorization: `Bearer ${accessTokenRef.current}` },
     })
@@ -104,12 +98,33 @@ export function useTrackQueue(accessToken, { onCreditChange, filters } = {}) {
       .catch(() => fetchNext([]));
   }, [fetchNext]);
 
+  // Reset and re-fetch whenever the auth state changes (login, logout, or
+  // initial mount as guest). Each transition gets a clean queue.
+  const prevTokenRef = useRef(undefined); // undefined = first run
+  const initialFetchDone = useRef(false);
   useEffect(() => {
-    if (accessToken && !initialFetchDone.current) {
+    if (prevTokenRef.current === undefined) {
+      // Initial mount — kick off the first fetch
+      prevTokenRef.current = accessToken;
       initialFetchDone.current = true;
+      setSeenIds([]);
+      seenIdsRef.current = [];
+      setCurrentTrack(null);
+      setIsExhausted(false);
+      setIsLoading(true);
+      _seedAndFetch();
+    } else if (accessToken !== prevTokenRef.current) {
+      // Token changed (login or logout) — reset queue
+      prevTokenRef.current = accessToken;
+      initialFetchDone.current = true;
+      setSeenIds([]);
+      seenIdsRef.current = [];
+      setCurrentTrack(null);
+      setIsExhausted(false);
+      setIsLoading(true);
       _seedAndFetch();
     }
-  }, [_seedAndFetch, accessToken]);
+  }, [accessToken, _seedAndFetch]);
 
   // Detect filter changes and reset the queue
   const filtersKeyRef = useRef(JSON.stringify(filters || {}));
@@ -118,7 +133,7 @@ export function useTrackQueue(accessToken, { onCreditChange, filters } = {}) {
     const key = JSON.stringify(filters || {});
     if (key !== filtersKeyRef.current) {
       filtersKeyRef.current = key;
-      if (accessTokenRef.current && initialFetchDone.current) {
+      if (initialFetchDone.current) {
         setSeenIds([]);
         seenIdsRef.current = [];
         setCurrentTrack(null);
@@ -132,7 +147,6 @@ export function useTrackQueue(accessToken, { onCreditChange, filters } = {}) {
   // Public reset: clear seen history and re-fetch a fresh feed.
   // Called when navigating back to Discover or when the feed is exhausted.
   const resetQueue = useCallback(() => {
-    if (!accessTokenRef.current) return;
     setSeenIds([]);
     seenIdsRef.current = [];
     setCurrentTrack(null);
@@ -149,14 +163,16 @@ export function useTrackQueue(accessToken, { onCreditChange, filters } = {}) {
 
   const skipTrack = useCallback(() => {
     if (!currentTrack) return;
-    fetch(`${API_BASE}/api/skips`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessTokenRef.current}`,
-      },
-      body: JSON.stringify({ track_id: currentTrack.id }),
-    }).catch(err => console.error('[useTrackQueue] skip failed:', err));
+    if (accessTokenRef.current) {
+      fetch(`${API_BASE}/api/skips`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessTokenRef.current}`,
+        },
+        body: JSON.stringify({ track_id: currentTrack.id }),
+      }).catch(err => console.error('[useTrackQueue] skip failed:', err));
+    }
     advanceQueue(currentTrack.id);
   }, [currentTrack, advanceQueue]);
 

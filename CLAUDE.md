@@ -1,38 +1,3 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-# RAST — Project Brief for Claude
-
-## What This Is
-RAST is a mobile-first web app for music producers.
-The core experience is a Tinder-style swipe interface where
-producers discover loops made by others — swipe right to use
-a loop, swipe left to pass. Producers earn credits by uploading
-loops and spend credits swiping right.
-
-This is a serious, production-grade project. Always implement
-at the highest possible level. Do not simplify for the sake of
-readability. Use best practices, proper architecture, and
-professional patterns throughout.
-
-## Dev Commands
-
-```bash
-# Backend (Flask) — run from project root
-python app.py                             # port 5000, init_db() runs on startup
-
-# Frontend (React + Vite) — run from frontend/
-npm run dev                               # port 5173
-npm run build                             # production build
-npm run lint                              # ESLint
-
-# Tests — run from project root
-py -m pytest                              # all tests (79 across 13 classes)
-py -m pytest tests/test_api.py::TestAuth  # single test class
-py -m pytest -k "test_login"              # by name pattern
-```
-
 ### CORS / Proxy
 Vite proxy in `frontend/vite.config.js` forwards `/api` and `/static` to
 `http://localhost:5000` and rewrites Set-Cookie domain for refresh token cookies.
@@ -63,6 +28,12 @@ Flask is a pure REST API. React handles all UI. No Jinja templating.
 
 ### Navigation
 No React Router. `activeTab` in `App.jsx`: `'discover'`, `'upload'`, `'library'`, `'profile'`.
+
+### Guest Browsing
+Unauthenticated users can browse the discover feed and skip freely.
+When a guest tries to like a loop, a sign up / log in sheet appears.
+After auth, the pending like is processed on the same track.
+Upload, Library, and Profile tabs redirect to auth when tapped by a guest.
 
 ### Swipe animation flow
 1. User presses Skip/Like → `exitDir` set to `'left'`/`'right'`
@@ -99,7 +70,7 @@ See `database.py` `init_db()` for schemas. Key constraints:
 - `likes` has `UNIQUE(user_id, track_id)` — re-liking is idempotent
 - `skips` uses `PRIMARY KEY (user_id, track_id)` — re-skip resets `skipped_at`
 - `credit_transactions.amount`: positive = earned, negative = spent
-- `credit_transactions.reason` values: `'signup'`, `'upload'`, `'like_received'`, `'swipe_right'`
+- `credit_transactions.reason` values: `'signup'`, `'upload'`, `'first_upload'`, `'like_received'`, `'swipe_right'`
 
 Add new columns/tables via `_migrate()` — never drop or recreate existing tables.
 All DB access goes through `database.py`. Never write SQL in `app.py`.
@@ -109,21 +80,28 @@ All DB access goes through `database.py`. Never write SQL in `app.py`.
 ## API Endpoints
 
 **Public:** `POST /api/auth/register`, `/login`, `/refresh`, `/logout`
+`GET /api/random-track` — also public for guest browsing (no auth required)
 
 **Protected (Bearer token):**
 `GET /api/me`, `/api/credits`, `/api/likes`, `/api/my-uploads` |
 `POST /api/upload`, `/api/likes`, `/api/skips` |
-`DELETE /api/likes/<track_id>` |
-`GET /api/random-track?seen=&genres=&keywords=&bpm_min=&bpm_max=`
+`DELETE /api/likes/<track_id>`
 
-`/api/random-track` excludes: own uploads, liked tracks (permanent),
-skipped tracks (2-day cooldown). Filter params use OR logic for genres/keywords.
+`/api/random-track` query params: `seen=&genres=&keywords=&bpm_min=&bpm_max=`
+When authenticated: excludes own uploads, liked tracks (permanent), skipped tracks (2-day cooldown).
+When guest: no exclusions applied.
 
 **Legacy (to be deprecated):** `GET /` and `POST /upload` — still use Jinja.
 
 ## Credit System
-- Registration → +10, Upload → +1, Receive like → +1, Swipe right → −1, Swipe left → free
-- Credits never go below 0. `POST /api/likes` returns 402 if credits = 0
+- Registration → +5 credits (`'signup'`)
+- First upload → +20 credits (`'first_upload'`)
+- Subsequent uploads → +1 credit (`'upload'`)
+- Receive a like → +1 credit (`'like_received'`)
+- Swipe right → −1 credit (`'swipe_right'`)
+- Swipe left → free
+- Credits never go below 0
+- `POST /api/likes` returns 402 if credits = 0
 - All changes via `add_credit_transaction(user_id, amount, reason)` in `database.py`
 
 ## Design System
@@ -150,3 +128,4 @@ Drag gesture swiping, stem purchasing, chat functionality
 - JWT tokens: access in memory, refresh in httpOnly cookies
 - credits never below 0
 - skips cooldown is 2 days — exclude via `skipped_at > NOW() - INTERVAL '2 days'`
+- Guest users can browse and skip freely but must auth to like, upload, or access library/profile

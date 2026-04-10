@@ -389,8 +389,11 @@ class TestRandomTrack:
         res = client.get(f"/api/random-track?seen={test_track}", headers=auth_headers)
         assert res.get_json().get("exhausted") is True
 
-    def test_no_auth_returns_401(self, client):
-        assert client.get("/api/random-track").status_code == 401
+    def test_no_auth_returns_track_as_guest(self, client, test_track):
+        res = client.get("/api/random-track")
+        assert res.status_code == 200
+        data = res.get_json()
+        assert data.get("id") == test_track or data.get("exhausted") is True
 
 
 # ===========================================================================
@@ -665,9 +668,13 @@ class TestEdgeCases:
         assert res.status_code == 422
 
     def test_missing_auth_header_returns_401(self, client):
-        for endpoint in ("/api/me", "/api/credits", "/api/random-track",
+        for endpoint in ("/api/me", "/api/credits",
                          "/api/likes", "/api/my-uploads"):
             assert client.get(endpoint).status_code == 401, endpoint
+
+    def test_random_track_accessible_without_auth(self, client):
+        res = client.get("/api/random-track")
+        assert res.status_code == 200
 
     def test_exhausted_feed_returns_correct_shape(self, client, auth_headers):
         res = client.get("/api/random-track", headers=auth_headers)

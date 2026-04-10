@@ -322,9 +322,9 @@ def post_skip():
 
 
 @app.route("/api/random-track")
-@jwt_required(locations=["headers"])
+@jwt_required(optional=True, locations=["headers"])
 def random_track():
-    current_user_id = get_jwt_identity()
+    current_user_id = get_jwt_identity()  # None for guests
     seen_param = request.args.get("seen", "")
     seen_ids = [int(i) for i in seen_param.split(",") if i.strip().isdigit()]
 

@@ -7,6 +7,7 @@ import RegisterScreen from './components/RegisterScreen.jsx';
 import ProfileScreen from './components/ProfileScreen.jsx';
 import LibraryScreen from './components/LibraryScreen.jsx';
 import FilterPanel from './components/FilterPanel.jsx';
+import AuthBottomSheet from './components/AuthBottomSheet.jsx';
 import { useTrackQueue } from './hooks/useTrackQueue.js';
 import { useAuth } from './hooks/useAuth.js';
 import { API_BASE } from './config.js';
@@ -145,8 +146,8 @@ function ExhaustedCard({ onRefresh }) {
  *
  * Auth flow:
  *   isLoading=true  → SplashScreen (session check in-flight)
- *   !accessToken    → LoginScreen / RegisterScreen
- *   accessToken     → full app (Discover / Upload)
+ *   !accessToken    → guest mode (Discover only, auth sheet for gated actions)
+ *   accessToken     → full app (all tabs)
  *
  * Swipe flow (Discover):
  *   1. User presses Skip or Like
@@ -165,6 +166,10 @@ export default function App() {
   const [filters, setFilters] = useState({ genres: [], keywords: [], bpmMin: 1, bpmMax: 300 });
   const [showWelcome, setShowWelcome] = useState(false);
   const welcomeUserRef = useRef(null);
+
+  // ── Guest auth sheet state ──
+  const [showAuthSheet, setShowAuthSheet] = useState(false);
+  const pendingLikeTrackRef = useRef(null);
 
   const showToast = useCallback((message) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -239,6 +244,26 @@ export default function App() {
     prevTabRef.current = activeTab;
   }, [activeTab, resetQueue, showWelcome, dismissWelcome]);
 
+  // ── Process pending like after guest authenticates ──
+  const prevAccessTokenRef = useRef(accessToken);
+  useEffect(() => {
+    if (accessToken && !prevAccessTokenRef.current && pendingLikeTrackRef.current) {
+      const trackId = pendingLikeTrackRef.current.id;
+      pendingLikeTrackRef.current = null;
+      fetch(`${API_BASE}/api/likes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ track_id: trackId }),
+      })
+        .then(res => { if (res.ok) refreshCredits(); })
+        .catch(err => console.error('[App] pending like failed:', err));
+    }
+    prevAccessTokenRef.current = accessToken;
+  }, [accessToken, refreshCredits]);
+
   // 'left' | 'right' | null — drives the card exit animation
   const [exitDir, setExitDir] = useState(null);
 
@@ -253,13 +278,18 @@ export default function App() {
 
   const handleLike = useCallback(() => {
     if (!currentTrack || exitDir) return;
+    if (!accessToken) {
+      pendingLikeTrackRef.current = currentTrack;
+      setShowAuthSheet(true);
+      return;
+    }
     if (credits < 1) {
       showToast("You're out of credits, upload a loop to earn more");
       return;
     }
     pendingActionRef.current = likeTrack;
     setExitDir('right');
-  }, [currentTrack, exitDir, likeTrack, credits, showToast]);
+  }, [currentTrack, exitDir, accessToken, likeTrack, credits, showToast]);
 
   const handleExited = useCallback(() => {
     if (pendingActionRef.current) {
@@ -271,32 +301,34 @@ export default function App() {
 
   const isActionDisabled = isLoading || isExhausted || !currentTrack || !!exitDir;
 
+  // ── Tab change: gate non-discover tabs for guests ──
+  const handleTabChange = useCallback((tabId) => {
+    if (!accessToken && tabId !== 'discover') {
+      pendingLikeTrackRef.current = null;
+      setShowAuthSheet(true);
+      return;
+    }
+    setActiveTab(tabId);
+  }, [accessToken]);
+
+  // ── Auth sheet handlers ──
+  const handleAuthSheetLogin = useCallback(async (email, password) => {
+    await login(email, password);
+    setShowAuthSheet(false);
+  }, [login]);
+
+  const handleAuthSheetRegister = useCallback(async (username, email, password) => {
+    await register(username, email, password);
+    setShowAuthSheet(false);
+  }, [register]);
+
   // ── Auth loading ──
   if (authLoading) {
     return <SplashScreen />;
   }
 
-  // ── Unauthenticated ──
-  if (!accessToken) {
-    return (
-      <div style={{ height: '100%', background: '#000' }}>
-        {authView === 'register' ? (
-          <RegisterScreen
-            onRegister={register}
-            onGoToLogin={() => setAuthView('login')}
-          />
-        ) : (
-          <LoginScreen
-            onLogin={login}
-            onGoToRegister={() => setAuthView('register')}
-          />
-        )}
-      </div>
-    );
-  }
-
   // ── Library screen ──
-  if (activeTab === 'library') {
+  if (accessToken && activeTab === 'library') {
     return (
       <div style={{
         height: '100%',
@@ -308,13 +340,13 @@ export default function App() {
         overflow: 'hidden',
       }}>
         <LibraryScreen accessToken={accessToken} />
-        <NavBar activeTab={activeTab} onTabChange={setActiveTab} />
+        <NavBar activeTab={activeTab} onTabChange={handleTabChange} />
       </div>
     );
   }
 
   // ── Chat screen ──
-  if (activeTab === 'chat') {
+  if (accessToken && activeTab === 'chat') {
     return (
       <div style={{
         height: '100%',
@@ -341,13 +373,13 @@ export default function App() {
             Chat with other producers is on the way.
           </div>
         </div>
-        <NavBar activeTab={activeTab} onTabChange={setActiveTab} />
+        <NavBar activeTab={activeTab} onTabChange={handleTabChange} />
       </div>
     );
   }
 
   // ── Profile screen ──
-  if (activeTab === 'profile') {
+  if (accessToken && activeTab === 'profile') {
     return (
       <div style={{
         height: '100%',
@@ -359,13 +391,13 @@ export default function App() {
         overflow: 'hidden',
       }}>
         <ProfileScreen accessToken={accessToken} onLogout={handleLogout} credits={credits} />
-        <NavBar activeTab={activeTab} onTabChange={setActiveTab} />
+        <NavBar activeTab={activeTab} onTabChange={handleTabChange} />
       </div>
     );
   }
 
   // ── Upload screen ──
-  if (activeTab === 'upload') {
+  if (accessToken && activeTab === 'upload') {
     return (
       <div style={{
         height: '100%',
@@ -383,7 +415,7 @@ export default function App() {
     );
   }
 
-  // ── Discover screen ──
+  // ── Discover screen (guests and authenticated users) ──
   return (
     <div style={{
       height: '100%',
@@ -431,32 +463,34 @@ export default function App() {
         )}
       </button>
 
-      {/* Credit badge (top right) */}
-      <div style={{
-        position: 'absolute',
-        top: '20px',
-        right: '20px',
-        zIndex: 30,
-        background: 'rgba(255,255,255,0.1)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        border: '1px solid rgba(255,255,255,0.12)',
-        borderRadius: '9999px',
-        padding: '4px 12px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '5px',
-      }}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="#D97706" stroke="none">
-          <circle cx="12" cy="12" r="10"/>
-        </svg>
-        <span style={{
-          fontSize: '12px',
-          fontWeight: 700,
-          color: '#fff',
-          lineHeight: 1,
-        }}>{credits}</span>
-      </div>
+      {/* Credit badge (top right) — authenticated users only */}
+      {accessToken && (
+        <div style={{
+          position: 'absolute',
+          top: '20px',
+          right: '20px',
+          zIndex: 30,
+          background: 'rgba(255,255,255,0.1)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          border: '1px solid rgba(255,255,255,0.12)',
+          borderRadius: '9999px',
+          padding: '4px 12px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '5px',
+        }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="#D97706" stroke="none">
+            <circle cx="12" cy="12" r="10"/>
+          </svg>
+          <span style={{
+            fontSize: '12px',
+            fontWeight: 700,
+            color: '#fff',
+            lineHeight: 1,
+          }}>{credits}</span>
+        </div>
+      )}
 
       {/* Toast notification */}
       {toast && (
@@ -588,7 +622,7 @@ export default function App() {
         )}
       </div>
 
-      <NavBar activeTab={activeTab} onTabChange={setActiveTab} pulseUpload={showWelcome} />
+      <NavBar activeTab={activeTab} onTabChange={handleTabChange} pulseUpload={showWelcome} />
 
       <FilterPanel
         isOpen={showFilterPanel}
@@ -596,6 +630,18 @@ export default function App() {
         onApply={handleApplyFilters}
         onClose={() => setShowFilterPanel(false)}
       />
+
+      {/* Auth bottom sheet for guests */}
+      {showAuthSheet && (
+        <AuthBottomSheet
+          onLogin={handleAuthSheetLogin}
+          onRegister={handleAuthSheetRegister}
+          onClose={() => {
+            setShowAuthSheet(false);
+            pendingLikeTrackRef.current = null;
+          }}
+        />
+      )}
     </div>
   );
 }

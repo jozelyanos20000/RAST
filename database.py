@@ -381,26 +381,30 @@ def record_skip(user_id, track_id):
 def get_random_track(exclude_ids=None, exclude_user_id=None,
                      genres=None, keywords=None, bpm_min=None, bpm_max=None):
     with get_connection() as conn:
-        _uid = int(exclude_user_id)
-        conditions = ["u.user_id != %s"]
-        params = [_uid]
+        conditions = []
+        params = []
+
+        if exclude_user_id is not None:
+            _uid = int(exclude_user_id)
+            conditions.append("u.user_id != %s")
+            params.append(_uid)
+
+            # Exclude liked tracks permanently
+            conditions.append(
+                "u.id NOT IN (SELECT track_id FROM likes WHERE user_id = %s)"
+            )
+            params.append(_uid)
+
+            # Exclude tracks skipped within the last 2 days
+            conditions.append(
+                "u.id NOT IN (SELECT track_id FROM skips WHERE user_id = %s AND skipped_at > NOW() - INTERVAL '2 days')"
+            )
+            params.append(_uid)
 
         if exclude_ids:
             placeholders = ",".join(["%s"] * len(exclude_ids))
             conditions.append(f"u.id NOT IN ({placeholders})")
             params.extend(exclude_ids)
-
-        # Exclude liked tracks permanently
-        conditions.append(
-            "u.id NOT IN (SELECT track_id FROM likes WHERE user_id = %s)"
-        )
-        params.append(_uid)
-
-        # Exclude tracks skipped within the last 2 days
-        conditions.append(
-            "u.id NOT IN (SELECT track_id FROM skips WHERE user_id = %s AND skipped_at > NOW() - INTERVAL '2 days')"
-        )
-        params.append(_uid)
 
         # Genre / keyword filter (OR between categories)
         content_conditions = []
@@ -425,7 +429,7 @@ def get_random_track(exclude_ids=None, exclude_user_id=None,
             conditions.append("u.bpm <= %s")
             params.append(bpm_max)
 
-        where = " AND ".join(conditions)
+        where = " AND ".join(conditions) if conditions else "1=1"
         row = conn.execute(
             f"""SELECT u.*, us.username AS uploaded_by
                 FROM uploads u
