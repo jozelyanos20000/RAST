@@ -1,3 +1,46 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Commands
+
+### Backend
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run Flask dev server (backend only, port 5000)
+flask run
+
+# Run all tests
+pytest
+
+# Run a single test file or test
+pytest tests/test_api.py::test_register
+```
+
+### Frontend
+```bash
+cd frontend
+
+# Install dependencies
+npm install
+
+# Dev server with Vite proxy to Flask on :5000 (port 5173)
+npm run dev
+
+# Production build → frontend/dist/
+npm run build
+
+# Lint
+npm run lint
+```
+
+### Full-stack dev
+Run `flask run` and `npm run dev` concurrently. Vite proxies `/api` and `/static` to `http://localhost:5000`.
+
+---
+
 ### CORS / Proxy
 Vite proxy in `frontend/vite.config.js` forwards `/api` and `/static` to
 `http://localhost:5000` and rewrites Set-Cookie domain for refresh token cookies.
